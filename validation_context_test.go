@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/santhosh-tekuri/jsonschema/v2"
+	"github.com/ory/jsonschema/v3"
 )
 
 func TestErrorsContext(t *testing.T) {

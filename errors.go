@@ -59,7 +59,7 @@ type ValidationError struct {
 
 func (ve *ValidationError) add(causes ...error) error {
 	for _, cause := range causes {
-		addContext(ve.InstancePtr, ve.SchemaPtr, cause)
+		_ = addContext(ve.InstancePtr, ve.SchemaPtr, cause)
 		ve.Causes = append(ve.Causes, cause.(*ValidationError))
 	}
 	return ve
@@ -94,7 +94,7 @@ func addContext(instancePtr, schemaPtr string, err error) error {
 		ve.Context.AddContext(instancePtr, ve.SchemaPtr)
 	}
 	for _, cause := range ve.Causes {
-		addContext(instancePtr, schemaPtr, cause)
+		_ = addContext(instancePtr, schemaPtr, cause)
 	}
 	return ve
 }

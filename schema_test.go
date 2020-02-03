@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/santhosh-tekuri/jsonschema/v2"
-	_ "github.com/santhosh-tekuri/jsonschema/v2/httploader"
+	"github.com/ory/jsonschema/v3"
+	_ "github.com/ory/jsonschema/v3/httploader"
 )
 
 var draft4, draft6, draft7 []byte
@@ -457,7 +457,7 @@ func toFileURL(path string) string {
 	return u.String()
 }
 
-// TestPanic tests https://github.com/santhosh-tekuri/jsonschema/issues/18
+// TestPanic tests https://github.com/ory/jsonschema/issues/18
 func TestPanic(t *testing.T) {
 	schema_d := `
 	{

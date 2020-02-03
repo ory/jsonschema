@@ -258,7 +258,6 @@ func (c Compiler) compileMap(r *resource, s *Schema, base string, m map[string]i
 			switch jsonType(item) {
 			case "object", "array":
 				allPrimitives = false
-				break
 			}
 		}
 		s.enumError = "enum failed"
@@ -422,7 +421,7 @@ func (c Compiler) compileMap(r *resource, s *Schema, base string, m map[string]i
 
 	if format, ok := m["format"]; ok {
 		s.Format = format.(string)
-		s.format, _ = Formats[s.Format]
+		s.format = Formats[s.Format]
 	}
 
 	loadFloat := func(pname string) *big.Float {
@@ -493,11 +492,11 @@ func (c Compiler) compileMap(r *resource, s *Schema, base string, m map[string]i
 		}
 		if encoding, ok := m["contentEncoding"]; ok {
 			s.ContentEncoding = encoding.(string)
-			s.decoder, _ = Decoders[s.ContentEncoding]
+			s.decoder = Decoders[s.ContentEncoding]
 		}
 		if mediaType, ok := m["contentMediaType"]; ok {
 			s.ContentMediaType = mediaType.(string)
-			s.mediaType, _ = MediaTypes[s.ContentMediaType]
+			s.mediaType = MediaTypes[s.ContentMediaType]
 		}
 		if c.ExtractAnnotations {
 			if readOnly, ok := m["readOnly"]; ok {

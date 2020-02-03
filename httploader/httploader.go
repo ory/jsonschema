@@ -8,7 +8,7 @@
 // registering its Loaders.
 //
 // To use httploader, link this package into your program:
-//	import _ "github.com/santhosh-tekuri/jsonschema/httploader"
+//	import _ "github.com/ory/jsonschema/v3/httploader"
 //
 package httploader
 
@@ -17,14 +17,14 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/santhosh-tekuri/jsonschema/v2"
+	"github.com/ory/x/httpx"
+
+	"github.com/ory/jsonschema/v3"
 )
 
-// Client is the default HTTP Client used to Get the resource.
-var Client = http.DefaultClient
-
+// Load implements jsonschemav2.Loader
 func Load(url string) (io.ReadCloser, error) {
-	resp, err := Client.Get(url)
+	resp, err := httpx.NewResilientClientLatencyToleranceMedium(nil).Get(url)
 	if err != nil {
 		return nil, err
 	}

@@ -1,10 +1,10 @@
 # jsonschema v2.1.0
 
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
-[![GoDoc](https://godoc.org/github.com/santhosh-tekuri/jsonschema?status.svg)](https://godoc.org/github.com/santhosh-tekuri/jsonschema)
-[![Go Report Card](https://goreportcard.com/badge/github.com/santhosh-tekuri/jsonschema)](https://goreportcard.com/report/github.com/santhosh-tekuri/jsonschema)
-[![Build Status](https://travis-ci.org/santhosh-tekuri/jsonschema.svg?branch=master)](https://travis-ci.org/santhosh-tekuri/jsonschema)
-[![codecov.io](https://codecov.io/github/santhosh-tekuri/jsonschema/coverage.svg?branch=master)](https://codecov.io/github/santhosh-tekuri/jsonschema?branch=master)
+[![GoDoc](https://godoc.org/github.com/ory/jsonschema?status.svg)](https://godoc.org/github.com/ory/jsonschema)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ory/jsonschema)](https://goreportcard.com/report/github.com/ory/jsonschema)
+[![CircleCI](https://circleci.com/gh/ory/jsonschema/tree/master.svg?style=badge)](https://circleci.com/gh/ory/jsonschema/tree/master)
+[![Coverage Status](https://coveralls.io/repos/github/ory/jsonschema/badge.svg?branch=master)](https://coveralls.io/github/ory/jsonschema?branch=master)
 
 Package jsonschema provides json-schema compilation and validation.
 
@@ -47,7 +47,7 @@ This package supports loading json-schema from filePath and fileURL.
 To load json-schema from HTTPURL, add following import:
 
 ```go
-import _ "github.com/santhosh-tekuri/jsonschema/v2/httploader"
+import _ "github.com/ory/jsonschema/v2/httploader"
 ```
 
 Loading from urls for other schemes (such as ftp), can be plugged in. see package jsonschema/httploader

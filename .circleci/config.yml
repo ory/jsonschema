@@ -1,7 +1,6 @@
 version: 2.1
 
 orbs:
-  nancy: ory/nancy@0.0.8
   golangci: ory/golangci@0.0.2
 
 jobs:
@@ -22,6 +21,5 @@ jobs:
 workflows:
   test:
     jobs:
-      - nancy/test
       - golangci/lint
       - test

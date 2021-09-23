@@ -51,7 +51,20 @@ type Compiler struct {
 // if '$schema' attribute is missing, it is treated as draft7. to change this
 // behavior change Compiler.Draft value
 func NewCompiler() *Compiler {
-	return &Compiler{Draft: latest, resources: make(map[string]*resource), Extensions: make(map[string]Extension)}
+	c := &Compiler{
+		Draft:      latest,
+		resources:  make(map[string]*resource),
+		Extensions: make(map[string]Extension),
+	}
+
+	drafts := []*Draft{Draft7, Draft6, Draft4}
+	for _, d := range drafts {
+		if err := c.AddResource(d.url, strings.NewReader(d.data)); err != nil {
+			panic(fmt.Sprintf("could not add draft %s: %s", d.url, err.Error()))
+		}
+	}
+
+	return c
 }
 
 // AddResource adds in-memory resource to the compiler.
@@ -79,9 +92,6 @@ func (c *Compiler) MustCompile(url string) *Schema {
 // Compile parses json-schema at given url returns, if successful,
 // a Schema object that can be used to match against json.
 func (c *Compiler) Compile(url string) (*Schema, error) {
-	if err := c.initStaticResources(); err != nil {
-		return nil, err
-	}
 	base, fragment := split(url)
 	if _, ok := c.resources[base]; !ok {
 		r, err := c.loadURL(base)
@@ -116,18 +126,6 @@ func (c *Compiler) Compile(url string) (*Schema, error) {
 		}
 	}
 	return c.compileRef(r, r.url, fragment)
-}
-
-func (c *Compiler) initStaticResources() error {
-	drafts := []*Draft{Draft7, Draft6, Draft4}
-	for _, d := range drafts {
-		if _, ok := c.resources[d.url]; !ok {
-			if err := c.AddResource(d.url, strings.NewReader(d.data)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 func (c Compiler) loadURL(s string) (io.ReadCloser, error) {

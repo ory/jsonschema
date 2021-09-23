@@ -553,3 +553,22 @@ func TestCompiler_LoadURL(t *testing.T) {
 		t.Fatal("error expected")
 	}
 }
+
+func TestSchemaReferencesDrafts(t *testing.T) {
+	c := jsonschema.NewCompiler()
+	file := "testdata/reference_draft.json"
+	t.Log(filepath.Base(file))
+	data, err := ioutil.ReadFile(file)
+	if err != nil {
+		t.Errorf("  FAIL: %v\n", err)
+		return
+	}
+	err = c.AddResource("reference_draft.json", bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("addResource failed. reason: %v\n", err)
+	}
+	_, err = c.Compile("reference_draft.json")
+	if err != nil {
+		t.Fatalf("compile should not error. reason: %v\n", err)
+	}
+}

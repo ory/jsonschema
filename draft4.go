@@ -7,12 +7,7 @@ package jsonschema
 import "strings"
 
 // Draft4 respresents http://json-schema.org/specification-links.html#draft-4
-var Draft4 = &Draft{id: "id", version: 4}
-
-func init() {
-	c := NewCompiler()
-	url := "http://json-schema.org/draft-04/schema"
-	err := c.AddResource(url, strings.NewReader(`{
+var Draft4 = &Draft{id: "id", version: 4, url: "http://json-schema.org/draft-04/schema", data: `{
 		"$schema": "http://json-schema.org/draft-04/schema#",
 		"description": "Core schema meta-schema",
 		"definitions": {
@@ -164,9 +159,13 @@ func init() {
 		    "exclusiveMinimum": [ "minimum" ]
 		},
 		"default": {}
-	}`))
+	}`}
+
+func init() {
+	c := NewCompiler()
+	err := c.AddResource(Draft4.url, strings.NewReader(Draft4.data))
 	if err != nil {
 		panic(err)
 	}
-	Draft4.meta = c.MustCompile(url)
+	Draft4.meta = c.MustCompile(Draft4.url)
 }

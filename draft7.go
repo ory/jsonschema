@@ -4,15 +4,12 @@
 
 package jsonschema
 
-import "strings"
+import (
+	"strings"
+)
 
 // Draft7 respresents http://json-schema.org/specification-links.html#draft-7
-var Draft7 = &Draft{id: "$id", version: 7}
-
-func init() {
-	c := NewCompiler()
-	url := "http://json-schema.org/draft-07/schema"
-	err := c.AddResource(url, strings.NewReader(`{
+var Draft7 = &Draft{id: "$id", version: 7, url: "http://json-schema.org/draft-07/schema", data: `{
 		"$schema": "http://json-schema.org/draft-07/schema#",
 		"$id": "http://json-schema.org/draft-07/schema#",
 		"title": "Core schema meta-schema",
@@ -186,9 +183,13 @@ func init() {
 			"not": { "$ref": "#" }
 		},
 		"default": true
-	}`))
+	}`}
+
+func init() {
+	c := NewCompiler()
+	err := c.AddResource(Draft7.url, strings.NewReader(Draft7.data))
 	if err != nil {
 		panic(err)
 	}
-	Draft7.meta = c.MustCompile(url)
+	Draft7.meta = c.MustCompile(Draft7.url)
 }

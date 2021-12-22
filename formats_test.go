@@ -92,6 +92,23 @@ func TestIsEmail(t *testing.T) {
 	}
 }
 
+func TestIsPhone(t *testing.T) {
+	tests := []test{
+		{"+380634872774", true},
+		{"+442087599036", true},
+		{"+18004444444", true},
+		{"1800801920", false},
+		{"0634872774", false},
+		{"+38-063-482-723-77", false}, // more than 17 characters long
+	}
+
+	for i, test := range tests {
+		if test.valid != isPhone(test.str) {
+			t.Errorf("#%d: %q, valid %t, got valid %t", i, test.str, test.valid, !test.valid)
+		}
+	}
+}
+
 func TestIsIPV4(t *testing.T) {
 	tests := []test{
 		{"192.168.0.1", true},

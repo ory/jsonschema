@@ -5,6 +5,7 @@
 package jsonschema
 
 import (
+	"github.com/nyaruka/phonenumbers"
 	"net"
 	"net/mail"
 	"net/url"
@@ -25,6 +26,7 @@ var Formats = map[string]func(interface{}) bool{
 	"time":                  isTime,
 	"hostname":              isHostname,
 	"email":                 isEmail,
+	"tel":                   isPhone,
 	"ip-address":            isIPV4,
 	"ipv4":                  isIPV4,
 	"ipv6":                  isIPV6,
@@ -165,6 +167,25 @@ func isEmail(v interface{}) bool {
 
 	_, err := mail.ParseAddress(s)
 	return err == nil
+}
+
+// isPhone tells whether given string is a valid phone number
+func isPhone(v interface{}) bool {
+	num, ok := v.(string)
+	if !ok {
+		return false
+	}
+
+	phoneNumber, err := phonenumbers.Parse(num, "")
+	if err != nil {
+		return false
+	}
+
+	if !phonenumbers.IsValidNumber(phoneNumber) {
+		return false
+	}
+
+	return true
 }
 
 // isIPV4 tells whether given string is a valid representation of an IPv4 address

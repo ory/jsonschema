@@ -1,6 +1,7 @@
 package jsonschema
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/url"
@@ -10,11 +11,11 @@ import (
 	"strings"
 )
 
-func loadFile(path string) (io.ReadCloser, error) {
+func loadFile(ctx context.Context, path string) (io.ReadCloser, error) {
 	return os.Open(path)
 }
 
-func loadFileURL(s string) (io.ReadCloser, error) {
+func loadFileURL(ctx context.Context, s string) (io.ReadCloser, error) {
 	u, err := url.Parse(s)
 	if err != nil {
 		return nil, err
@@ -32,7 +33,7 @@ func loadFileURL(s string) (io.ReadCloser, error) {
 //
 // New loaders can be registered by adding to this map. Key is schema,
 // value is function that knows how to load url of that schema
-var Loaders = map[string]func(url string) (io.ReadCloser, error){
+var Loaders = map[string]func(ctx context.Context, url string) (io.ReadCloser, error){
 	"":     loadFile,
 	"file": loadFileURL,
 }
@@ -51,7 +52,7 @@ func (s SchemeNotRegisteredError) Error() string {
 // Users can change this variable, if they would like to take complete
 // responsibility of loading given URL. Used by Compiler if its LoadURL
 // field is nil.
-var LoadURL = func(s string) (io.ReadCloser, error) {
+var LoadURL = func(ctx context.Context, s string) (io.ReadCloser, error) {
 	u, err := url.Parse(s)
 	if err != nil {
 		return nil, err
@@ -61,5 +62,5 @@ var LoadURL = func(s string) (io.ReadCloser, error) {
 		return nil, SchemeNotRegisteredError(u.Scheme)
 
 	}
-	return loader(s)
+	return loader(ctx, s)
 }

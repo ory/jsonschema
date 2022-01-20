@@ -2,6 +2,7 @@ package jsonschema_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -64,8 +65,9 @@ func TestErrorsContext(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("case=%d", k), func(t *testing.T) {
+			ctx := context.Background()
 			var (
-				schema = jsonschema.MustCompile(tc.path)
+				schema = jsonschema.MustCompile(ctx, tc.path)
 				err    = schema.Validate(bytes.NewBufferString(tc.doc))
 			)
 

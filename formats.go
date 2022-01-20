@@ -5,7 +5,6 @@
 package jsonschema
 
 import (
-	"github.com/nyaruka/phonenumbers"
 	"net"
 	"net/mail"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nyaruka/phonenumbers"
 )
 
 // Formats is a registry of functions, which know how to validate

@@ -6,10 +6,11 @@
 // To use base64loader, link this package into your program:
 //	import _ "github.com/ory/jsonschema/v3/base64loader"
 //
-package fileloader
+package base64loader
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 )
 
 // Load implements jsonschema.Loader
-func Load(url string) (_ io.ReadCloser, err error) {
+func Load(ctx context.Context, url string) (_ io.ReadCloser, err error) {
 	encoded := strings.TrimPrefix(url, "base64://")
 
 	var raw []byte

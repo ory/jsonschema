@@ -5,6 +5,7 @@
 package jsonschema_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,8 +15,10 @@ import (
 	"github.com/ory/jsonschema/v3"
 )
 
+var ctx = context.Background()
+
 func powerOfExt() jsonschema.Extension {
-	meta, err := jsonschema.CompileString("powerOf.json", `{
+	meta, err := jsonschema.CompileString(ctx, "powerOf.json", `{
 		"properties" : {
 			"powerOf": {
 				"type": "integer",
@@ -62,7 +65,7 @@ func TestPowerOfExt(t *testing.T) {
 		if err := c.AddResource("test.json", strings.NewReader(`{"powerOf": "hello"}`)); err != nil {
 			t.Fatal(err)
 		}
-		_, err := c.Compile("test.json")
+		_, err := c.Compile(ctx, "test.json")
 		if err == nil {
 			t.Fatal("error expected")
 		}
@@ -74,7 +77,7 @@ func TestPowerOfExt(t *testing.T) {
 		if err := c.AddResource("test.json", strings.NewReader(`{"powerOf": 10}`)); err != nil {
 			t.Fatal(err)
 		}
-		sch, err := c.Compile("test.json")
+		sch, err := c.Compile(ctx, "test.json")
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -4,6 +4,8 @@
 
 package jsonschema
 
+import "context"
+
 // Extension is used to define additional keywords to standard jsonschema.
 // An extension can implement more than one keyword.
 //
@@ -33,14 +35,14 @@ type CompilerContext struct {
 
 // Compile compiles given value v into *Schema. This is useful in implementing
 // keyword like allOf/oneOf
-func (ctx CompilerContext) Compile(v interface{}) (*Schema, error) {
-	return ctx.c.compile(ctx.r, nil, ctx.base, v)
+func (ctx CompilerContext) Compile(c context.Context, v interface{}) (*Schema, error) {
+	return ctx.c.compile(c, ctx.r, nil, ctx.base, v)
 }
 
 // CompileRef compiles the schema referenced by ref uri
-func (ctx CompilerContext) CompileRef(ref string) (*Schema, error) {
+func (ctx CompilerContext) CompileRef(c context.Context, ref string) (*Schema, error) {
 	b, _ := split(ctx.base)
-	return ctx.c.compileRef(ctx.r, b, ref)
+	return ctx.c.compileRef(c, ctx.r, b, ref)
 }
 
 // ValidationContext provides additional context required in validating for extension.

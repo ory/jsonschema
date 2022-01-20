@@ -5,7 +5,6 @@
 package jsonschema_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,8 +13,6 @@ import (
 
 	"github.com/ory/jsonschema/v3"
 )
-
-var ctx = context.Background()
 
 func powerOfExt() jsonschema.Extension {
 	meta, err := jsonschema.CompileString(ctx, "powerOf.json", `{

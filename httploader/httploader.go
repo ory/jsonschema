@@ -20,8 +20,6 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/ory/x/httpx"
-
 	"github.com/ory/jsonschema/v3"
 )
 
@@ -31,7 +29,7 @@ const ContextKey = "github.com/ory/jsonschema/v3/httploader.HTTPClient"
 func Load(ctx context.Context, url string) (io.ReadCloser, error) {
 	var hc *retryablehttp.Client
 	if v := ctx.Value(ContextKey); v == nil {
-		hc = httpx.NewResilientClient()
+		return nil, fmt.Errorf("expected a client to be set for %s but received nil", ContextKey)
 	} else if c, ok := v.(*retryablehttp.Client); ok {
 		hc = c
 	} else {

@@ -7,9 +7,10 @@ package jsonschema_test
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"github.com/hashicorp/go-retryablehttp"
+	"github.com/ory/jsonschema/v3/httploader"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -26,6 +27,8 @@ import (
 )
 
 var draft4, draft6, draft7 []byte
+
+var ctx = context.WithValue(context.Background(), httploader.ContextKey, retryablehttp.NewClient())
 
 func init() {
 	var err error
@@ -66,7 +69,6 @@ type testGroup struct {
 }
 
 func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
-	ctx := context.Background()
 	server := &http.Server{Addr: "localhost:1234", Handler: http.FileServer(http.Dir("testdata/remotes"))}
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
@@ -174,7 +176,6 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 }
 
 func TestInvalidSchema(t *testing.T) {
-	ctx := context.Background()
 	t.Run("MustCompile with panic", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -242,18 +243,14 @@ func TestInvalidSchema(t *testing.T) {
 }
 
 func TestCompileURL(t *testing.T) {
-	ctx := context.Background()
-	tr := http.DefaultTransport.(*http.Transport)
-	if tr.TLSClientConfig == nil {
-		tr.TLSClientConfig = &tls.Config{}
-	}
-	tr.TLSClientConfig.InsecureSkipVerify = true
-
 	handler := http.FileServer(http.Dir("testdata"))
 	httpServer := httptest.NewServer(handler)
 	defer httpServer.Close()
 	httpsServer := httptest.NewTLSServer(handler)
 	defer httpsServer.Close()
+	c := retryablehttp.NewClient()
+	c.HTTPClient = httpsServer.Client()
+	ctx := context.WithValue(context.Background(), httploader.ContextKey, c)
 
 	validTests := []struct {
 		schema, doc string
@@ -301,8 +298,6 @@ func TestCompileURL(t *testing.T) {
 }
 
 func TestValidateInterface(t *testing.T) {
-	ctx := context.Background()
-
 	files := []string{
 		"testdata/draft4/type.json",
 		"testdata/draft4/minimum.json",
@@ -359,7 +354,6 @@ func TestValidateInterface(t *testing.T) {
 }
 
 func TestInvalidJsonTypeError(t *testing.T) {
-	ctx := context.Background()
 	compiler := jsonschema.NewCompiler()
 	err := compiler.AddResource("test.json", strings.NewReader(`{ "type": "string"}`))
 	if err != nil {
@@ -380,7 +374,6 @@ func TestInvalidJsonTypeError(t *testing.T) {
 }
 
 func TestExtractAnnotations(t *testing.T) {
-	ctx := context.Background()
 	t.Run("false", func(t *testing.T) {
 		compiler := jsonschema.NewCompiler()
 
@@ -467,7 +460,6 @@ func toFileURL(path string) string {
 
 // TestPanic tests https://github.com/ory/jsonschema/issues/18
 func TestPanic(t *testing.T) {
-	ctx := context.Background()
 	schema_d := `
 	{
 		"type": "object",
@@ -505,7 +497,6 @@ func TestPanic(t *testing.T) {
 }
 
 func TestNonStringFormat(t *testing.T) {
-	ctx := context.Background()
 	jsonschema.Formats["even-number"] = func(v interface{}) bool {
 		switch v := v.(type) {
 		case json.Number:
@@ -536,7 +527,6 @@ func TestNonStringFormat(t *testing.T) {
 }
 
 func TestCompiler_LoadURL(t *testing.T) {
-	ctx := context.Background()
 	const (
 		base   = `{ "type": "string" }`
 		schema = `{ "allOf": [{ "$ref": "base.json" }, { "maxLength": 3 }] }`
@@ -566,7 +556,6 @@ func TestCompiler_LoadURL(t *testing.T) {
 }
 
 func TestSchemaReferencesDrafts(t *testing.T) {
-	ctx := context.Background()
 	c := jsonschema.NewCompiler()
 	file := "testdata/reference_draft.json"
 	t.Log(filepath.Base(file))

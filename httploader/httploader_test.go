@@ -31,7 +31,7 @@ func TestHTTPLoader(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	mr := func(t *testing.T, ctx context.Context) string {
-		res, err := Load(context.Background(), ts.URL)
+		res, err := Load(context.WithValue(context.Background(), ContextKey, retryablehttp.NewClient()), ts.URL)
 		require.NoError(t, err)
 		defer res.Close()
 		body, err := ioutil.ReadAll(res)

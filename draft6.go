@@ -4,7 +4,10 @@
 
 package jsonschema
 
-import "strings"
+import (
+	"context"
+	"strings"
+)
 
 // Draft6 respresents http://json-schema.org/specification-links.html#draft-6
 var Draft6 = &Draft{id: "$id", version: 6, url: "http://json-schema.org/draft-06/schema", data: `{
@@ -160,10 +163,11 @@ var Draft6 = &Draft{id: "$id", version: 6, url: "http://json-schema.org/draft-06
 	}`}
 
 func init() {
+	ctx := context.Background()
 	c := NewCompiler()
 	err := c.AddResource(Draft6.url, strings.NewReader(Draft6.data))
 	if err != nil {
 		panic(err)
 	}
-	Draft6.meta = c.MustCompile(Draft6.url)
+	Draft6.meta = c.MustCompile(ctx, Draft6.url)
 }

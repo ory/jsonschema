@@ -5,6 +5,7 @@
 package jsonschema
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -90,23 +91,23 @@ type Schema struct {
 // a Schema object that can be used to match against json.
 //
 // Returned error can be *SchemaError
-func Compile(url string) (*Schema, error) {
-	return NewCompiler().Compile(url)
+func Compile(ctx context.Context, url string) (*Schema, error) {
+	return NewCompiler().Compile(ctx, url)
 }
 
 // MustCompile is like Compile but panics if the url cannot be compiled to *Schema.
 // It simplifies safe initialization of global variables holding compiled Schemas.
-func MustCompile(url string) *Schema {
-	return NewCompiler().MustCompile(url)
+func MustCompile(ctx context.Context, url string) *Schema {
+	return NewCompiler().MustCompile(ctx, url)
 }
 
 // CompileString parses and compiles the given schema with given base url.
-func CompileString(url, schema string) (*Schema, error) {
+func CompileString(ctx context.Context, url, schema string) (*Schema, error) {
 	c := NewCompiler()
 	if err := c.AddResource(url, strings.NewReader(schema)); err != nil {
 		return nil, err
 	}
-	return c.Compile(url)
+	return c.Compile(ctx, url)
 }
 
 // Validate validates the given json data, against the json-schema.

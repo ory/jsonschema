@@ -9,6 +9,7 @@
 package fileloader
 
 import (
+	"context"
 	"io"
 	"os"
 	"strings"
@@ -17,7 +18,7 @@ import (
 )
 
 // Load implements jsonschema.Loader
-func Load(url string) (io.ReadCloser, error) {
+func Load(ctx context.Context, url string) (io.ReadCloser, error) {
 	f, err := os.Open(strings.TrimPrefix(url, "file://"))
 	if err != nil {
 		return nil, err

@@ -13,25 +13,41 @@
 package httploader
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/hashicorp/go-retryablehttp"
 
 	"github.com/ory/x/httpx"
 
 	"github.com/ory/jsonschema/v3"
 )
 
+const ContextKey = "github.com/ory/jsonschema/v3/httploader.HTTPClient"
+
 // Load implements jsonschemav2.Loader
-func Load(url string) (io.ReadCloser, error) {
-	resp, err := httpx.NewResilientClient().Get(url)
+func Load(ctx context.Context, url string) (io.ReadCloser, error) {
+	var hc *retryablehttp.Client
+	if v := ctx.Value(ContextKey); v == nil {
+		hc = httpx.NewResilientClient()
+	} else if c, ok := v.(*retryablehttp.Client); ok {
+		hc = c
+	} else {
+		return nil, fmt.Errorf("invalid context value for %s expected %T but got: %T", ContextKey, new(retryablehttp.Client), v)
+	}
+
+	resp, err := hc.Get(url)
 	if err != nil {
 		return nil, err
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		_ = resp.Body.Close()
 		return nil, fmt.Errorf("%s returned status code %d", url, resp.StatusCode)
 	}
+
 	return resp.Body, nil
 }
 

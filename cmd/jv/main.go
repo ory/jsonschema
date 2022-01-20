@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -18,14 +19,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	schema, err := jsonschema.Compile(os.Args[1])
+	schema, err := jsonschema.Compile(context.Background(), os.Args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
 	for _, f := range os.Args[2:] {
-		r, err := jsonschema.LoadURL(f)
+		r, err := jsonschema.LoadURL(context.Background(), f)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error in reading %q. reason: \n%v\n", f, err)
 			os.Exit(1)

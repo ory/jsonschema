@@ -5,6 +5,7 @@
 package jsonschema
 
 import (
+	"context"
 	"strings"
 )
 
@@ -186,10 +187,11 @@ var Draft7 = &Draft{id: "$id", version: 7, url: "http://json-schema.org/draft-07
 	}`}
 
 func init() {
+	ctx := context.Background()
 	c := NewCompiler()
 	err := c.AddResource(Draft7.url, strings.NewReader(Draft7.data))
 	if err != nil {
 		panic(err)
 	}
-	Draft7.meta = c.MustCompile(Draft7.url)
+	Draft7.meta = c.MustCompile(ctx, Draft7.url)
 }

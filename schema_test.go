@@ -6,6 +6,7 @@ package jsonschema_test
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -65,6 +66,7 @@ type testGroup struct {
 }
 
 func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
+	ctx := context.Background()
 	server := &http.Server{Addr: "localhost:1234", Handler: http.FileServer(http.Dir("testdata/remotes"))}
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
@@ -116,7 +118,7 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 				t.Errorf("    FAIL: add resource failed, reason: %v\n", err)
 				continue
 			}
-			schema, err := c.Compile("test.json")
+			schema, err := c.Compile(ctx, "test.json")
 			if err != nil {
 				t.Errorf("    FAIL: schema compilation failed, reason: %v\n", err)
 				continue
@@ -158,7 +160,7 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 			if err := c.AddResource("test.json", strings.NewReader("{}")); err != nil {
 				t.Fatal(err)
 			}
-			s, err := c.Compile("test.json")
+			s, err := c.Compile(ctx, "test.json")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -172,13 +174,14 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 }
 
 func TestInvalidSchema(t *testing.T) {
+	ctx := context.Background()
 	t.Run("MustCompile with panic", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
 				t.Error("panic expected")
 			}
 		}()
-		jsonschema.MustCompile("testdata/invalid_schema.json")
+		jsonschema.MustCompile(ctx, "testdata/invalid_schema.json")
 	})
 
 	t.Run("MustCompile without panic", func(t *testing.T) {
@@ -187,7 +190,7 @@ func TestInvalidSchema(t *testing.T) {
 				t.Error("panic not expected")
 			}
 		}()
-		jsonschema.MustCompile("testdata/customer_schema.json#/0")
+		jsonschema.MustCompile(ctx, "testdata/customer_schema.json#/0")
 	})
 
 	t.Run("invalid json", func(t *testing.T) {
@@ -229,7 +232,7 @@ func TestInvalidSchema(t *testing.T) {
 			if len(test.Fragment) > 0 {
 				url += test.Fragment
 			}
-			if _, err = c.Compile(url); err == nil {
+			if _, err = c.Compile(ctx, url); err == nil {
 				t.Error("error expected")
 			} else {
 				t.Log(err)
@@ -239,6 +242,7 @@ func TestInvalidSchema(t *testing.T) {
 }
 
 func TestCompileURL(t *testing.T) {
+	ctx := context.Background()
 	tr := http.DefaultTransport.(*http.Transport)
 	if tr.TLSClientConfig == nil {
 		tr.TLSClientConfig = &tls.Config{}
@@ -262,7 +266,7 @@ func TestCompileURL(t *testing.T) {
 	}
 	for i, test := range validTests {
 		t.Logf("valid #%d: %+v", i, test)
-		s, err := jsonschema.Compile(test.schema)
+		s, err := jsonschema.Compile(ctx, test.schema)
 		if err != nil {
 			t.Errorf("valid #%d: %v", i, err)
 			return
@@ -288,7 +292,7 @@ func TestCompileURL(t *testing.T) {
 	}
 	for i, test := range invalidTests {
 		t.Logf("invalid #%d: %v", i, test)
-		if _, err := jsonschema.Compile(test); err == nil {
+		if _, err := jsonschema.Compile(ctx, test); err == nil {
 			t.Errorf("invalid #%d: expected error", i)
 		} else {
 			t.Logf("invalid #%d: %v", i, err)
@@ -297,6 +301,8 @@ func TestCompileURL(t *testing.T) {
 }
 
 func TestValidateInterface(t *testing.T) {
+	ctx := context.Background()
+
 	files := []string{
 		"testdata/draft4/type.json",
 		"testdata/draft4/minimum.json",
@@ -322,7 +328,7 @@ func TestValidateInterface(t *testing.T) {
 				continue
 			}
 			c.Draft = jsonschema.Draft4
-			schema, err := c.Compile("test.json")
+			schema, err := c.Compile(ctx, "test.json")
 			if err != nil {
 				t.Errorf("    FAIL: schema compilation failed, reason: %v\n", err)
 				continue
@@ -353,12 +359,13 @@ func TestValidateInterface(t *testing.T) {
 }
 
 func TestInvalidJsonTypeError(t *testing.T) {
+	ctx := context.Background()
 	compiler := jsonschema.NewCompiler()
 	err := compiler.AddResource("test.json", strings.NewReader(`{ "type": "string"}`))
 	if err != nil {
 		t.Fatalf("addResource failed. reason: %v\n", err)
 	}
-	schema, err := compiler.Compile("test.json")
+	schema, err := compiler.Compile(ctx, "test.json")
 	if err != nil {
 		t.Fatalf("schema compilation failed. reason: %v\n", err)
 	}
@@ -373,6 +380,7 @@ func TestInvalidJsonTypeError(t *testing.T) {
 }
 
 func TestExtractAnnotations(t *testing.T) {
+	ctx := context.Background()
 	t.Run("false", func(t *testing.T) {
 		compiler := jsonschema.NewCompiler()
 
@@ -383,7 +391,7 @@ func TestExtractAnnotations(t *testing.T) {
 			t.Fatalf("addResource failed. reason: %v\n", err)
 		}
 
-		schema, err := compiler.Compile("test.json")
+		schema, err := compiler.Compile(ctx, "test.json")
 		if err != nil {
 			t.Fatalf("schema compilation failed. reason: %v\n", err)
 		}
@@ -404,7 +412,7 @@ func TestExtractAnnotations(t *testing.T) {
 			t.Fatalf("addResource failed. reason: %v\n", err)
 		}
 
-		schema, err := compiler.Compile("test.json")
+		schema, err := compiler.Compile(ctx, "test.json")
 		if err != nil {
 			t.Fatalf("schema compilation failed. reason: %v\n", err)
 		}
@@ -427,7 +435,7 @@ func TestExtractAnnotations(t *testing.T) {
 			t.Fatalf("addResource failed. reason: %v\n", err)
 		}
 
-		schema, err := compiler.Compile("test.json")
+		schema, err := compiler.Compile(ctx, "test.json")
 		if err != nil {
 			t.Fatalf("schema compilation failed. reason: %v\n", err)
 		}
@@ -459,6 +467,7 @@ func toFileURL(path string) string {
 
 // TestPanic tests https://github.com/ory/jsonschema/issues/18
 func TestPanic(t *testing.T) {
+	ctx := context.Background()
 	schema_d := `
 	{
 		"type": "object",
@@ -489,13 +498,14 @@ func TestPanic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := c.Compile("schema.json"); err != nil {
+	if _, err := c.Compile(ctx, "schema.json"); err != nil {
 		t.Error("no error expected")
 		return
 	}
 }
 
 func TestNonStringFormat(t *testing.T) {
+	ctx := context.Background()
 	jsonschema.Formats["even-number"] = func(v interface{}) bool {
 		switch v := v.(type) {
 		case json.Number:
@@ -513,7 +523,7 @@ func TestNonStringFormat(t *testing.T) {
 	if err := c.AddResource("schema.json", strings.NewReader(schema)); err != nil {
 		t.Fatal(err)
 	}
-	s, err := c.Compile("schema.json")
+	s, err := c.Compile(ctx, "schema.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,13 +536,14 @@ func TestNonStringFormat(t *testing.T) {
 }
 
 func TestCompiler_LoadURL(t *testing.T) {
+	ctx := context.Background()
 	const (
 		base   = `{ "type": "string" }`
 		schema = `{ "allOf": [{ "$ref": "base.json" }, { "maxLength": 3 }] }`
 	)
 
 	c := jsonschema.NewCompiler()
-	c.LoadURL = func(s string) (io.ReadCloser, error) {
+	c.LoadURL = func(ctx context.Context, s string) (io.ReadCloser, error) {
 		switch s {
 		case "base.json":
 			return ioutil.NopCloser(strings.NewReader(base)), nil
@@ -542,7 +553,7 @@ func TestCompiler_LoadURL(t *testing.T) {
 			return nil, errors.New("unsupported schema")
 		}
 	}
-	s, err := c.Compile("schema.json")
+	s, err := c.Compile(ctx, "schema.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -555,6 +566,7 @@ func TestCompiler_LoadURL(t *testing.T) {
 }
 
 func TestSchemaReferencesDrafts(t *testing.T) {
+	ctx := context.Background()
 	c := jsonschema.NewCompiler()
 	file := "testdata/reference_draft.json"
 	t.Log(filepath.Base(file))
@@ -567,7 +579,7 @@ func TestSchemaReferencesDrafts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("addResource failed. reason: %v\n", err)
 	}
-	_, err = c.Compile("reference_draft.json")
+	_, err = c.Compile(ctx, "reference_draft.json")
 	if err != nil {
 		t.Fatalf("compile should not error. reason: %v\n", err)
 	}

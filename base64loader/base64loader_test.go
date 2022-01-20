@@ -1,14 +1,14 @@
-package fileloader_test
+package base64loader_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ory/jsonschema/v3"
-	_ "github.com/ory/jsonschema/v3/base64loader"
 )
 
 func TestLoad(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLoad(t *testing.T) {
 		base64.RawURLEncoding,
 		base64.RawStdEncoding,
 	} {
-		c, err := jsonschema.Compile("base64://" + enc.EncodeToString([]byte(schema)))
+		c, err := jsonschema.Compile(context.Background(), "base64://"+enc.EncodeToString([]byte(schema)))
 		require.NoError(t, err)
 		require.EqualError(t, c.Validate(bytes.NewBufferString(`{"bar": 1234}`)), "I[#/bar] S[#/properties/bar/type] expected string, but got number")
 	}

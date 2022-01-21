@@ -23,7 +23,9 @@ import (
 	"github.com/ory/jsonschema/v3"
 )
 
-const ContextKey = "github.com/ory/jsonschema/v3/httploader.HTTPClient"
+type key string
+
+const ContextKey key = "github.com/ory/jsonschema/v3/httploader.HTTPClient"
 
 // Load implements jsonschemav2.Loader
 func Load(ctx context.Context, url string) (io.ReadCloser, error) {

@@ -6,6 +6,12 @@
 [![CircleCI](https://circleci.com/gh/ory/jsonschema/tree/master.svg?style=badge)](https://circleci.com/gh/ory/jsonschema/tree/master)
 [![Coverage Status](https://coveralls.io/repos/github/ory/jsonschema/badge.svg?branch=master)](https://coveralls.io/github/ory/jsonschema?branch=master)
 
+!!! WARNING !!!
+
+This library is used internally at Ory and subject to rapid change.
+
+!!! WARNING !!!
+
 Package jsonschema provides json-schema compilation and validation.
 
 This implementation of JSON Schema, supports draft4, draft6 and draft7.

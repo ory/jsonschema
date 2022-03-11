@@ -9,8 +9,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/hashicorp/go-retryablehttp"
-	"github.com/ory/jsonschema/v3/httploader"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -21,6 +19,10 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/hashicorp/go-retryablehttp"
+
+	"github.com/ory/jsonschema/v3/httploader"
 
 	"github.com/ory/jsonschema/v3"
 	_ "github.com/ory/jsonschema/v3/httploader"

@@ -1,13 +1,15 @@
 SHELL=/bin/bash -o pipefail
 
+export PATH := .bin:${PATH}
+
 .PHONY: tools
 tools:
-		go install github.com/ory/go-acc github.com/ory/x/tools/listx github.com/sqs/goreturns github.com/jandelgado/gcov2lcov
+		GOBIN=$(shell pwd)/.bin/ go install github.com/ory/go-acc golang.org/x/tools/cmd/goimports github.com/jandelgado/gcov2lcov
 
 # Formats the code
 .PHONY: format
-format:
-		$$(go env GOPATH)/bin/goreturns -w -local github.com/ory $$($$(go env GOPATH)/bin/listx .)
+format: tools
+		goimports -w -local github.com/ory *.go $$(go list -f '{{.Dir}}' ./...)
 
 # Runs tests in short mode, without database adapters
 .PHONY: docker

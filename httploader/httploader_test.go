@@ -48,6 +48,5 @@ func TestHTTPLoader(t *testing.T) {
 	require.ErrorIs(t, err, errFoo)
 
 	_, err = Load(context.WithValue(context.Background(), ContextKey, new(struct{})), ts.URL)
-	require.Error(t, err, errFoo)
-	assert.Equal(t, "invalid context value for github.com/ory/jsonschema/v3/httploader.HTTPClient expected *retryablehttp.Client but got: *struct {}", err.Error())
+	assert.ErrorContains(t, err, "invalid context value for github.com/ory/jsonschema/v3/httploader.HTTPClient expected *retryablehttp.Client but got: *struct {}")
 }

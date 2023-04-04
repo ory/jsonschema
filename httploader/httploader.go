@@ -8,8 +8,8 @@
 // registering its Loaders.
 //
 // To use httploader, link this package into your program:
-//	import _ "github.com/ory/jsonschema/v3/httploader"
 //
+//	import _ "github.com/ory/jsonschema/v3/httploader"
 package httploader
 
 import (
@@ -38,7 +38,12 @@ func Load(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, fmt.Errorf("invalid context value for %s expected %T but got: %T", ContextKey, new(retryablehttp.Client), v)
 	}
 
-	resp, err := hc.Get(url)
+	req, err := retryablehttp.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return nil, err
 	}

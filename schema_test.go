@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -22,10 +21,8 @@ import (
 
 	"github.com/hashicorp/go-retryablehttp"
 
-	"github.com/ory/jsonschema/v3/httploader"
-
 	"github.com/ory/jsonschema/v3"
-	_ "github.com/ory/jsonschema/v3/httploader"
+	"github.com/ory/jsonschema/v3/httploader"
 )
 
 var draft4, draft6, draft7 []byte
@@ -34,15 +31,15 @@ var ctx = context.WithValue(context.Background(), httploader.ContextKey, retryab
 
 func init() {
 	var err error
-	draft4, err = ioutil.ReadFile("testdata/draft4.json")
+	draft4, err = os.ReadFile("testdata/draft4.json")
 	if err != nil {
 		panic(err)
 	}
-	draft6, err = ioutil.ReadFile("testdata/draft6.json")
+	draft6, err = os.ReadFile("testdata/draft6.json")
 	if err != nil {
 		panic(err)
 	}
-	draft7, err = ioutil.ReadFile("testdata/draft7.json")
+	draft7, err = os.ReadFile("testdata/draft7.json")
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +71,7 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 	server := &http.Server{Addr: "localhost:1234", Handler: http.FileServer(http.Dir("testdata/remotes"))}
 	go func() {
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	defer server.Close()
@@ -92,7 +89,7 @@ func testFolder(t *testing.T, folder string, draft *jsonschema.Draft) {
 		}
 
 		t.Log(info.Name())
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Errorf("  FAIL: %v\n", err)
 			return nil
@@ -217,7 +214,7 @@ func TestInvalidSchema(t *testing.T) {
 		Schema      json.RawMessage
 		Fragment    string
 	}
-	data, err := ioutil.ReadFile("testdata/invalid_schemas.json")
+	data, err := os.ReadFile("testdata/invalid_schemas.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +304,7 @@ func TestValidateInterface(t *testing.T) {
 	}
 	for _, file := range files {
 		t.Log(filepath.Base(file))
-		data, err := ioutil.ReadFile(file)
+		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Errorf("  FAIL: %v\n", err)
 			return
@@ -538,9 +535,9 @@ func TestCompiler_LoadURL(t *testing.T) {
 	c.LoadURL = func(ctx context.Context, s string) (io.ReadCloser, error) {
 		switch s {
 		case "base.json":
-			return ioutil.NopCloser(strings.NewReader(base)), nil
+			return io.NopCloser(strings.NewReader(base)), nil
 		case "schema.json":
-			return ioutil.NopCloser(strings.NewReader(schema)), nil
+			return io.NopCloser(strings.NewReader(schema)), nil
 		default:
 			return nil, errors.New("unsupported schema")
 		}
@@ -561,7 +558,7 @@ func TestSchemaReferencesDrafts(t *testing.T) {
 	c := jsonschema.NewCompiler()
 	file := "testdata/reference_draft.json"
 	t.Log(filepath.Base(file))
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		t.Errorf("  FAIL: %v\n", err)
 		return

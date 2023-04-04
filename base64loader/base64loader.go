@@ -4,8 +4,8 @@
 // registering its Loaders.
 //
 // To use base64loader, link this package into your program:
-//	import _ "github.com/ory/jsonschema/v3/base64loader"
 //
+//	import _ "github.com/ory/jsonschema/v3/base64loader"
 package base64loader
 
 import (
@@ -14,7 +14,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strings"
 
 	"github.com/ory/jsonschema/v3"
@@ -31,7 +30,7 @@ func Load(ctx context.Context, url string) (_ io.ReadCloser, err error) {
 		return nil, fmt.Errorf("unable to decode std encoded base64 string: %s", err)
 	}
 
-	return ioutil.NopCloser(bytes.NewBuffer(raw)), nil
+	return io.NopCloser(bytes.NewBuffer(raw)), nil
 }
 
 func init() {

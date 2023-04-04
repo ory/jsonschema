@@ -3,7 +3,7 @@ package httploader
 import (
 	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,12 +13,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var fooErr = errors.New("foo")
+var errFoo = errors.New("foo")
 
 type rt struct{}
 
 func (r rt) RoundTrip(_ *http.Request) (*http.Response, error) {
-	return nil, fooErr
+	return nil, errFoo
 }
 
 var _ http.RoundTripper = new(rt)
@@ -34,7 +34,7 @@ func TestHTTPLoader(t *testing.T) {
 		res, err := Load(context.WithValue(context.Background(), ContextKey, retryablehttp.NewClient()), ts.URL)
 		require.NoError(t, err)
 		defer res.Close()
-		body, err := ioutil.ReadAll(res)
+		body, err := io.ReadAll(res)
 		require.NoError(t, err)
 		return string(body)
 	}
@@ -45,9 +45,9 @@ func TestHTTPLoader(t *testing.T) {
 	hc.RetryMax = 1
 	hc.HTTPClient.Transport = new(rt)
 	_, err := Load(context.WithValue(context.Background(), ContextKey, hc), ts.URL)
-	require.ErrorIs(t, err, fooErr)
+	require.ErrorIs(t, err, errFoo)
 
 	_, err = Load(context.WithValue(context.Background(), ContextKey, new(struct{})), ts.URL)
-	require.Error(t, err, fooErr)
+	require.Error(t, err, errFoo)
 	assert.Equal(t, "invalid context value for github.com/ory/jsonschema/v3/httploader.HTTPClient expected *retryablehttp.Client but got: *struct {}", err.Error())
 }

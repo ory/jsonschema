@@ -80,7 +80,7 @@ func (ve *ValidationError) Error() string {
 	return msg
 }
 
-func validationError(schemaPtr string, format string, a ...interface{}) *ValidationError {
+func validationErrorf(schemaPtr string, format string, a ...interface{}) *ValidationError {
 	return &ValidationError{fmt.Sprintf(format, a...), "", "", schemaPtr, nil, nil}
 }
 

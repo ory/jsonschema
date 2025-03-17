@@ -57,12 +57,12 @@ func (ValidationContext) Validate(s *Schema, v interface{}) error {
 
 // Error used to construct validation error by extensions. schemaPtr is relative json pointer.
 func (ValidationContext) Error(schemaPtr string, format string, a ...interface{}) *ValidationError {
-	return validationError(schemaPtr, format, a...)
+	return validationErrorf(schemaPtr, format, a...)
 }
 
 // Group is used by extensions to group multiple errors as causes to parent error.
 // This is useful in implementing keywords like allOf where each schema specified
-// in allOf can result a validationError.
+// in allOf can result a validationErrorf.
 func (ValidationError) Group(parent *ValidationError, causes ...error) error {
 	return parent.add(causes...)
 }

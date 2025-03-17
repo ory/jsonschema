@@ -1,5 +1,10 @@
 SHELL=/bin/bash -o pipefail
 
+export PATH := .bin:${PATH}
+
+.bin/golangci-lint: Makefile
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b .bin v1.64.8
+
 # Formats the code
 .PHONY: format
 format:
@@ -11,5 +16,5 @@ docker:
 		docker build -f .docker/Dockerfile-build -t oryd/kratos:latest .
 
 .PHONY: lint
-lint:
-		GO111MODULE=on golangci-lint run -v ./...
+lint: .bin/golangci-lint
+		golangci-lint run -v ./...

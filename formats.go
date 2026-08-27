@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nyaruka/phonenumbers"
+	"github.com/nyaruka/phonenumbers/v2"
 )
 
 // Formats is a registry of functions, which know how to validate

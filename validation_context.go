@@ -1,11 +1,5 @@
 package jsonschema
 
-import (
-	"fmt"
-	"strconv"
-	"strings"
-)
-
 // ValidationErrorContext
 type ValidationErrorContext interface {
 	AddContext(instancePtr, schemaPtr string)
@@ -31,20 +25,5 @@ func (r *ValidationErrorContextRequired) FinishInstanceContext() {
 		} else {
 			r.Missing[k] = "#/" + p
 		}
-	}
-}
-
-func validationRequiredError(properties []string) *ValidationError {
-	missing := make([]string, len(properties))
-
-	for k := range missing {
-		missing[k] = strconv.Quote(properties[k])
-		properties[k] = escape(properties[k])
-	}
-
-	return &ValidationError{
-		SchemaPtr: "required",
-		Message:   fmt.Sprintf("missing properties: %s", strings.Join(missing, ", ")),
-		Context:   &ValidationErrorContextRequired{Missing: properties},
 	}
 }

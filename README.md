@@ -105,6 +105,39 @@ Developers can register their own formats by adding them to `jsonschema.Formats`
 
 "application/json" contentMediaType is supported. Custom mediatypes can be registered by adding them to `jsonschema.MediaTypes` map.
 
+## Processing limits
+
+Set `Compiler.Limits` to configure compilation and validation budgets. A nil
+policy preserves the default behavior. Zero-valued fields in a non-nil policy
+use the defaults documented on `Limits`.
+
+```go
+compiler := jsonschema.NewCompiler()
+compiler.Limits = &jsonschema.Limits{
+    MaxDepth: 256,
+    MaxWork:  10000000,
+}
+schema, err := compiler.Compile(ctx, "schemas/purchaseOrder.json")
+if err != nil {
+    return err
+}
+return schema.ValidateContext(ctx, reader)
+```
+
+Compiled schemas retain a copy of the policy. `ValidateContext` and
+`ValidateInterfaceContext` use the context of the current operation for
+cancellation and limit callbacks.
+
+By default, exceeded limits return an error matching `ErrResourceLimit`. Set
+`Limits.OnLimit` to observe each exceeded kind once per operation and choose
+whether processing continues. Returning nil reports without enforcing the
+threshold; returning an error enforces it. Reporting preserves complete results
+and does not impose the configured resource ceiling. Ordinary validation errors
+and cancellation remain errors. Callbacks must support concurrent operations.
+
+Resource readers and extension callbacks must apply their own input and work
+limits and honor cancellation.
+
 ## ValidationError
 
 The ValidationError returned by Validate method contains detailed context to understand why and where the error is.

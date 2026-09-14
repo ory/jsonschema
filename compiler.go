@@ -29,6 +29,9 @@ var latest = Draft7
 //
 // Currently draft4, draft6 and draft7 are supported
 type Compiler struct {
+	// Limits bounds compilation and validation when non-nil.
+	Limits *Limits
+
 	// Draft represents the draft used when '$schema' attribute is missing.
 	//
 	// This defaults to latest draft (currently draft7).
@@ -92,7 +95,43 @@ func (c *Compiler) MustCompile(ctx context.Context, url string) *Schema {
 
 // Compile parses json-schema at given url returns, if successful,
 // a Schema object that can be used to match against json.
-func (c *Compiler) Compile(ctx context.Context, url string) (*Schema, error) {
+func (c *Compiler) Compile(ctx context.Context, url string) (schema *Schema, err error) {
+	if _, ok := ctx.Value(budgetKey{}).(*budget); ok {
+		return c.compileURL(ctx, url)
+	}
+	b := newBudget(ctx, c.Limits)
+	defer func() { b.finished = true }()
+	defer func() {
+		if r := recover(); r != nil {
+			if abort, ok := r.(budgetAbort); ok {
+				err = abort.err
+				schema = nil
+			} else {
+				panic(r)
+			}
+		}
+		if err != nil {
+			for _, resource := range c.resources {
+				resource.schemas = make(map[string]*Schema)
+			}
+		}
+	}()
+	if c.Limits != nil {
+		for _, resource := range c.resources {
+			resource.schemas = make(map[string]*Schema)
+		}
+	}
+	schema, err = c.compileURL(context.WithValue(ctx, budgetKey{}, b), url)
+	b.observeError(err)
+	b.spend(0)
+	return schema, err
+}
+
+func (c *Compiler) compileURL(ctx context.Context, url string) (*Schema, error) {
+	b := compilationBudget(ctx)
+	b.enter()
+	defer b.leave()
+	b.spend(len(url))
 	base, fragment := split(url)
 	if _, ok := c.resources[base]; !ok {
 		r, err := c.loadURL(ctx, base)
@@ -105,6 +144,10 @@ func (c *Compiler) Compile(ctx context.Context, url string) (*Schema, error) {
 		}
 	}
 	r := c.resources[base]
+	if !b.resources[r] {
+		b.scan(r.doc)
+		b.resources[r] = true
+	}
 	if r.draft == nil {
 		if m, ok := r.doc.(map[string]interface{}); ok {
 			if url, ok := m["$schema"]; ok {
@@ -118,6 +161,9 @@ func (c *Compiler) Compile(ctx context.Context, url string) (*Schema, error) {
 				case "http://json-schema.org/draft-04/schema#":
 					r.draft = Draft4
 				default:
+					if b.limits != nil {
+						return nil, fmt.Errorf("unknown $schema")
+					}
 					return nil, fmt.Errorf("unknown $schema %q", url)
 				}
 			}
@@ -137,10 +183,14 @@ func (c Compiler) loadURL(ctx context.Context, s string) (io.ReadCloser, error) 
 }
 
 func (c *Compiler) compileRef(ctx context.Context, r *resource, base, ref string) (*Schema, error) {
+	b := compilationBudget(ctx)
+	b.enter()
+	defer b.leave()
+	b.spend(len(base) + len(ref))
 	var err error
 	if rootFragment(ref) {
 		if _, ok := r.schemas["#"]; !ok {
-			if err := c.validateSchema(r, "", r.doc); err != nil {
+			if err := c.validateSchema(ctx, r, "", r.doc); err != nil {
 				return nil, err
 			}
 			s := &Schema{URL: r.url, Ptr: "#"}
@@ -154,11 +204,11 @@ func (c *Compiler) compileRef(ctx context.Context, r *resource, base, ref string
 
 	if strings.HasPrefix(ref, "#/") {
 		if _, ok := r.schemas[ref]; !ok {
-			ptrBase, doc, err := r.resolvePtr(ref)
+			ptrBase, doc, err := r.resolvePtr(ref, b)
 			if err != nil {
 				return nil, err
 			}
-			if err := c.validateSchema(r, strings.TrimPrefix(ref, "#/"), doc); err != nil {
+			if err := c.validateSchema(ctx, r, strings.TrimPrefix(ref, "#/"), doc); err != nil {
 				return nil, err
 			}
 			r.schemas[ref] = &Schema{URL: base, Ptr: ref}
@@ -178,17 +228,17 @@ func (c *Compiler) compileRef(ctx context.Context, r *resource, base, ref string
 	}
 
 	ids := make(map[string]map[string]interface{})
-	if err := resolveIDs(r.draft, r.url, r.doc, ids); err != nil {
+	if err := resolveIDs(r.draft, r.url, r.doc, ids, b); err != nil {
 		return nil, err
 	}
 	if v, ok := ids[refURL]; ok {
-		if err := c.validateSchema(r, "", v); err != nil {
+		if err := c.validateSchema(ctx, r, "", v); err != nil {
 			return nil, err
 		}
 		u, f := split(refURL)
 		s := &Schema{URL: u, Ptr: f}
 		r.schemas[refURL] = s
-		if err := c.compileMap(ctx, r, s, refURL, v); err != nil {
+		if _, err := c.compile(ctx, r, s, refURL, v); err != nil {
 			return nil, err
 		}
 		return s, nil
@@ -202,10 +252,15 @@ func (c *Compiler) compileRef(ctx context.Context, r *resource, base, ref string
 }
 
 func (c *Compiler) compile(ctx context.Context, r *resource, s *Schema, base string, m interface{}) (*Schema, error) {
+	b := compilationBudget(ctx)
+	b.enter()
+	defer b.leave()
+	b.node()
 	if s == nil {
 		s = new(Schema)
 		s.URL, _ = split(base)
 	}
+	s.limits = b.limits
 	switch m := m.(type) {
 	case bool:
 		s.Always = &m
@@ -216,9 +271,12 @@ func (c *Compiler) compile(ctx context.Context, r *resource, s *Schema, base str
 }
 
 func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base string, m map[string]interface{}) error {
+	b := compilationBudget(ctx)
+	b.spend(len(m))
 	var err error
 
 	if id, ok := m[r.draft.id]; ok {
+		b.spend(len(base) + len(id.(string)))
 		if base, err = resolveURL(base, id.(string)); err != nil {
 			return err
 		}
@@ -247,18 +305,20 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 		s.Enum = e.([]interface{})
 		allPrimitives := true
 		for _, item := range s.Enum {
+			b.spend(1)
 			switch jsonType(item) {
 			case "object", "array":
 				allPrimitives = false
 			}
 		}
 		s.enumError = "enum failed"
-		if allPrimitives {
+		if allPrimitives && (b.limits == nil || !b.displayLimit("diagnostic enum")) {
 			if len(s.Enum) == 1 {
 				s.enumError = fmt.Sprintf("value must be %#v", s.Enum[0])
 			} else {
 				strEnum := make([]string, len(s.Enum))
 				for i, item := range s.Enum {
+					b.spend(1)
 					strEnum[i] = fmt.Sprintf("%#v", item)
 				}
 				s.enumError = fmt.Sprintf("value must be one of %s", strings.Join(strEnum, ", "))
@@ -280,8 +340,10 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 	loadSchemas := func(pname string) ([]*Schema, error) {
 		if pvalue, ok := m[pname]; ok {
 			pvalue := pvalue.([]interface{})
+			b.spend(len(pvalue))
 			schemas := make([]*Schema, len(pvalue))
 			for i, v := range pvalue {
+				b.spend(1)
 				sch, err := c.compile(ctx, r, nil, base, v)
 				if err != nil {
 					return nil, err
@@ -319,6 +381,7 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 		props := props.(map[string]interface{})
 		s.Properties = make(map[string]*Schema, len(props))
 		for pname, pmap := range props {
+			b.spend(1)
 			s.Properties[pname], err = c.compile(ctx, r, nil, base, pmap)
 			if err != nil {
 				return err
@@ -334,7 +397,12 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 		patternProps := patternProps.(map[string]interface{})
 		s.PatternProperties = make(map[*regexp.Regexp]*Schema, len(patternProps))
 		for pattern, pmap := range patternProps {
-			s.PatternProperties[regexp.MustCompile(pattern)], err = c.compile(ctx, r, nil, base, pmap)
+			b.spend(1)
+			expression, regexErr := b.regex(pattern)
+			if regexErr != nil {
+				return regexErr
+			}
+			s.PatternProperties[expression], err = c.compile(ctx, r, nil, base, pmap)
 			if err != nil {
 				return err
 			}
@@ -359,6 +427,7 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 		deps := deps.(map[string]interface{})
 		s.Dependencies = make(map[string]interface{}, len(deps))
 		for pname, pvalue := range deps {
+			b.spend(1)
 			switch pvalue := pvalue.(type) {
 			case []interface{}:
 				s.Dependencies[pname] = toStrings(pvalue)
@@ -408,7 +477,10 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 	s.MinLength, s.MaxLength = loadInt("minLength"), loadInt("maxLength")
 
 	if pattern, ok := m["pattern"]; ok {
-		s.Pattern = regexp.MustCompile(pattern.(string))
+		s.Pattern, err = b.regex(pattern.(string))
+		if err != nil {
+			return err
+		}
 	}
 
 	if format, ok := m["format"]; ok {
@@ -418,8 +490,7 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 
 	loadFloat := func(pname string) *big.Float {
 		if num, ok := m[pname]; ok {
-			r, _ := new(big.Float).SetString(string(num.(json.Number)))
-			return r
+			return b.number(num)
 		}
 		return nil
 	}
@@ -504,7 +575,9 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 	}
 
 	for name, ext := range c.Extensions {
-		cs, err := ext.Compile(CompilerContext{c, r, base}, m)
+		b.spend(1)
+		cs, err := ext.Compile(CompilerContext{c: c, r: r, base: base, budget: b}, m)
+		b.spend(0)
 		if err != nil {
 			return err
 		}
@@ -521,24 +594,22 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 	return nil
 }
 
-func (c *Compiler) validateSchema(r *resource, ptr string, v interface{}) error {
+func (c *Compiler) validateSchema(ctx context.Context, r *resource, ptr string, v interface{}) error {
+	b := compilationBudget(ctx)
 	validate := func(meta *Schema) error {
 		if meta == nil {
 			return nil
 		}
-		if err := meta.validate(v); err != nil {
+		if err := meta.validate(v, b); err != nil {
 			_ = addContext(ptr, "", err)
 			finishSchemaContext(err, meta)
 			finishInstanceContext(err)
-			var instancePtr string
-			if ptr == "" {
-				instancePtr = "#"
-			} else {
-				instancePtr = "#/" + ptr
-			}
+			instancePtr := b.joinPtr("#", ptr)
+			b.spend(len(r.url))
 			return &SchemaError{
 				r.url,
 				&ValidationError{
+					budget:      b,
 					Message:     fmt.Sprintf("doesn't validate with %q", meta.URL+meta.Ptr),
 					InstancePtr: instancePtr,
 					SchemaURL:   meta.URL,
@@ -554,6 +625,7 @@ func (c *Compiler) validateSchema(r *resource, ptr string, v interface{}) error 
 		return err
 	}
 	for _, ext := range c.Extensions {
+		b.spend(1)
 		if err := validate(ext.Meta); err != nil {
 			return err
 		}

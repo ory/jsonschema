@@ -28,36 +28,46 @@ type Extension struct {
 
 // CompilerContext provides additional context required in compiling for extension.
 type CompilerContext struct {
-	c    *Compiler
-	r    *resource
-	base string
+	c      *Compiler
+	r      *resource
+	base   string
+	budget *budget
 }
 
 // Compile compiles given value v into *Schema. This is useful in implementing
 // keyword like allOf/oneOf
 func (ctx CompilerContext) Compile(c context.Context, v interface{}) (*Schema, error) {
-	return ctx.c.compile(c, ctx.r, nil, ctx.base, v)
+	if err := c.Err(); err != nil {
+		panic(budgetAbort{err})
+	}
+	return ctx.c.compile(context.WithValue(c, budgetKey{}, ctx.budget), ctx.r, nil, ctx.base, v)
 }
 
 // CompileRef compiles the schema referenced by ref uri
 func (ctx CompilerContext) CompileRef(c context.Context, ref string) (*Schema, error) {
+	if err := c.Err(); err != nil {
+		panic(budgetAbort{err})
+	}
 	b, _ := split(ctx.base)
-	return ctx.c.compileRef(c, ctx.r, b, ref)
+	return ctx.c.compileRef(context.WithValue(c, budgetKey{}, ctx.budget), ctx.r, b, ref)
 }
 
 // ValidationContext provides additional context required in validating for extension.
-type ValidationContext struct{}
+type ValidationContext struct{ budget *budget }
 
 // Validate validates schema s with value v. Extension must use this method instead of
 // *Schema.ValidateInterface method. This will be useful in implementing keywords like
 // allOf/oneOf
-func (ValidationContext) Validate(s *Schema, v interface{}) error {
-	return s.validate(v)
+func (ctx ValidationContext) Validate(s *Schema, v interface{}) error {
+	return s.validate(v, ctx.budget)
 }
 
 // Error used to construct validation error by extensions. schemaPtr is relative json pointer.
-func (ValidationContext) Error(schemaPtr string, format string, a ...interface{}) *ValidationError {
-	return validationErrorf(schemaPtr, format, a...)
+func (ctx ValidationContext) Error(schemaPtr string, format string, a ...interface{}) *ValidationError {
+	if ctx.budget == nil {
+		return validationErrorf(schemaPtr, format, a...)
+	}
+	return ctx.budget.errorf(schemaPtr, format, a...)
 }
 
 // Group is used by extensions to group multiple errors as causes to parent error.

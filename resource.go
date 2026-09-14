@@ -83,14 +83,16 @@ func resolveURL(base, ref string) (string, error) {
 	return filepath.Join(dir, ref) + fragment, nil
 }
 
-func (r *resource) resolvePtr(ptr string) (string, interface{}, error) {
+func (r *resource) resolvePtr(ptr string, b *budget) (string, interface{}, error) {
 	if !strings.HasPrefix(ptr, "#/") {
 		panic(fmt.Sprintf("BUG: resolvePtr(%q)", ptr))
 	}
 	base := r.url
 	p := strings.TrimPrefix(ptr, "#/")
 	doc := r.doc
+	b.spend(len(p))
 	for _, item := range strings.Split(p, "/") {
+		b.spend(1)
 		item = strings.Replace(item, "~1", "/", -1)
 		item = strings.Replace(item, "~0", "~", -1)
 		item, err := url.PathUnescape(item)
@@ -143,7 +145,9 @@ func rootFragment(fragment string) bool {
 	return fragment == "" || fragment == "#" || fragment == "#/"
 }
 
-func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[string]interface{}) error {
+func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[string]interface{}, budget *budget) error {
+	budget.enter()
+	defer budget.leave()
 	m, ok := v.(map[string]interface{})
 	if !ok {
 		return nil
@@ -159,7 +163,7 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 
 	for _, pname := range []string{"not", "additionalProperties"} {
 		if m, ok := m[pname]; ok {
-			if err := resolveIDs(draft, base, m, ids); err != nil {
+			if err := resolveIDs(draft, base, m, ids, budget); err != nil {
 				return err
 			}
 		}
@@ -168,7 +172,7 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 	for _, pname := range []string{"allOf", "anyOf", "oneOf"} {
 		if arr, ok := m[pname]; ok {
 			for _, m := range arr.([]interface{}) {
-				if err := resolveIDs(draft, base, m, ids); err != nil {
+				if err := resolveIDs(draft, base, m, ids, budget); err != nil {
 					return err
 				}
 			}
@@ -178,7 +182,7 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 	for _, pname := range []string{"definitions", "properties", "patternProperties", "dependencies"} {
 		if props, ok := m[pname]; ok {
 			for _, m := range props.(map[string]interface{}) {
-				if err := resolveIDs(draft, base, m, ids); err != nil {
+				if err := resolveIDs(draft, base, m, ids, budget); err != nil {
 					return err
 				}
 			}
@@ -188,19 +192,19 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 	if items, ok := m["items"]; ok {
 		switch items := items.(type) {
 		case map[string]interface{}:
-			if err := resolveIDs(draft, base, items, ids); err != nil {
+			if err := resolveIDs(draft, base, items, ids, budget); err != nil {
 				return err
 			}
 		case []interface{}:
 			for _, item := range items {
-				if err := resolveIDs(draft, base, item, ids); err != nil {
+				if err := resolveIDs(draft, base, item, ids, budget); err != nil {
 					return err
 				}
 			}
 		}
 		if additionalItems, ok := m["additionalItems"]; ok {
 			if additionalItems, ok := additionalItems.(map[string]interface{}); ok {
-				if err := resolveIDs(draft, base, additionalItems, ids); err != nil {
+				if err := resolveIDs(draft, base, additionalItems, ids, budget); err != nil {
 					return err
 				}
 			}
@@ -210,7 +214,7 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 	if draft.version >= 6 {
 		for _, pname := range []string{"propertyNames", "contains"} {
 			if m, ok := m[pname]; ok {
-				if err := resolveIDs(draft, base, m, ids); err != nil {
+				if err := resolveIDs(draft, base, m, ids, budget); err != nil {
 					return err
 				}
 			}
@@ -219,12 +223,12 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 
 	if draft.version >= 7 {
 		if iff, ok := m["if"]; ok {
-			if err := resolveIDs(draft, base, iff, ids); err != nil {
+			if err := resolveIDs(draft, base, iff, ids, budget); err != nil {
 				return err
 			}
 			for _, pname := range []string{"then", "else"} {
 				if m, ok := m[pname]; ok {
-					if err := resolveIDs(draft, base, m, ids); err != nil {
+					if err := resolveIDs(draft, base, m, ids, budget); err != nil {
 						return err
 					}
 				}

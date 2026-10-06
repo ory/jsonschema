@@ -76,6 +76,7 @@ type budget struct {
 	limits                                        *Limits
 	depth, nodes, work, regexInstructions, errors int
 	resources                                     map[*resource]bool
+	ids                                           map[*resource]map[string]map[string]interface{}
 	regexps                                       map[string]compiledRegex
 	reported                                      map[string]error
 	finished                                      bool
@@ -314,14 +315,12 @@ func (b *budget) duplicate(values []interface{}) (int, int, bool) {
 		default:
 			key := value
 			if jsonType(value) == "number" {
-				parsed := b.number(value)
-				if parsed == nil {
-					panic(InvalidJSONTypeError("number"))
-				}
-				if parsed.Sign() == 0 {
-					key = numericKey("0")
-				} else {
+				// Numbers outside the big.Float range keep their literal key, matching equal.
+				if parsed := b.number(value); parsed != nil {
 					key = numericKey(parsed.Text('x', -1))
+					if parsed.Sign() == 0 {
+						key = numericKey("0")
+					}
 				}
 			} else if text, ok := value.(string); ok {
 				b.spend(len(text))

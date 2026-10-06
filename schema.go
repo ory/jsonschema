@@ -657,7 +657,7 @@ func (b *budget) equal(v1, v2 interface{}) bool {
 		num1 := b.number(v1)
 		num2 := b.number(v2)
 		if num1 == nil || num2 == nil {
-			panic(InvalidJSONTypeError("number outside supported range"))
+			return v1 == v2
 		}
 		return num1.Cmp(num2) == 0
 	default:

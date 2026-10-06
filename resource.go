@@ -103,6 +103,7 @@ func (r *resource) resolvePtr(ptr string, b *budget) (string, interface{}, error
 		case map[string]interface{}:
 			if id, ok := d[r.draft.id]; ok {
 				if id, ok := id.(string); ok {
+					b.spend(len(base) + len(id))
 					if base, err = resolveURL(base, id); err != nil {
 						return "", nil, err
 					}
@@ -153,7 +154,9 @@ func resolveIDs(draft *Draft, base string, v interface{}, ids map[string]map[str
 		return nil
 	}
 	if id, ok := m[draft.id]; ok {
-		b, err := resolveURL(base, id.(string))
+		id := id.(string)
+		budget.spend(len(base) + len(id))
+		b, err := resolveURL(base, id)
 		if err != nil {
 			return err
 		}

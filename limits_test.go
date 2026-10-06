@@ -427,3 +427,112 @@ func TestNumericParsingWork(t *testing.T) {
 		require.ErrorIs(t, s.Validate(strings.NewReader(strings.Repeat("9", 128))), ErrResourceLimit)
 	}
 }
+
+func TestCompilerUnparsableNumbers(t *testing.T) {
+	t.Parallel()
+	const number = "1e99999999999999999999"
+	for _, schema := range []string{
+		`{"enum":[` + number + `]}`,
+		`{"required":[` + number + `]}`,
+		`{"required":[[` + number + `],[` + number + `]]}`,
+		`{"multipleOf":` + number + `}`,
+	} {
+		for name, limits := range map[string]*Limits{
+			"nil":     nil,
+			"observe": {OnLimit: func(context.Context, error) error { return nil }},
+			"enforce": {},
+		} {
+			t.Run(name+" "+schema, func(t *testing.T) {
+				t.Parallel()
+				c := NewCompiler()
+				c.Limits = limits
+				require.NoError(t, c.AddResource("schema.json", strings.NewReader(schema)))
+				require.NotPanics(t, func() { _, _ = c.Compile(t.Context(), "schema.json") })
+			})
+		}
+	}
+}
+
+func TestUniqueItemsUnparsableNumbers(t *testing.T) {
+	t.Parallel()
+	s, err := CompileString(t.Context(), "schema.json", `{"uniqueItems":true}`)
+	require.NoError(t, err)
+	require.NoError(t, s.Validate(strings.NewReader(`[1e99999999999999999999,"1e99999999999999999999",1]`)))
+	for _, values := range []string{
+		`[1e99999999999999999999,1e99999999999999999999]`,
+		`[[1e99999999999999999999],[1e99999999999999999999]]`,
+	} {
+		var validation *ValidationError
+		require.ErrorAs(t, s.Validate(strings.NewReader(values)), &validation)
+		require.Equal(t, "#/uniqueItems", validation.SchemaPtr)
+	}
+}
+
+func TestCompilerChargesIDResolution(t *testing.T) {
+	t.Parallel()
+	id := "http://example.com/" + strings.Repeat("a", 100000)
+	pointerDefinitions := make(map[string]interface{})
+	pointerProperties := make(map[string]interface{})
+	identifierDefinitions := make(map[string]interface{})
+	for i := 0; i < 20; i++ {
+		pointerDefinitions["d"+strconv.Itoa(i)] = true
+		pointerProperties["p"+strconv.Itoa(i)] = map[string]interface{}{"$ref": "#/definitions/c/definitions/d" + strconv.Itoa(i)}
+		identifierDefinitions["d"+strconv.Itoa(i)] = map[string]interface{}{"$id": "#a" + strconv.Itoa(i)}
+	}
+	for name, document := range map[string]map[string]interface{}{
+		"pointer": {
+			"definitions": map[string]interface{}{"c": map[string]interface{}{"$id": id, "definitions": pointerDefinitions}},
+			"properties":  pointerProperties,
+		},
+		"identifier": {
+			"$id":         id,
+			"definitions": identifierDefinitions,
+			"properties":  map[string]interface{}{"p": map[string]interface{}{"$ref": "#a0"}},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			raw, err := json.Marshal(document)
+			require.NoError(t, err)
+			c := NewCompiler()
+			c.Limits = &Limits{MaxWork: 1000000}
+			require.NoError(t, c.AddResource("schema.json", strings.NewReader(string(raw))))
+			_, err = c.Compile(t.Context(), "schema.json")
+			require.ErrorIs(t, err, ErrResourceLimit)
+		})
+	}
+}
+
+func TestCompilerResolvesIDsOncePerResource(t *testing.T) {
+	compile := func(n int) float64 {
+		definitions := make(map[string]interface{}, n)
+		properties := make(map[string]interface{}, n)
+		for i := 0; i < n; i++ {
+			definitions["d"+strconv.Itoa(i)] = map[string]interface{}{"$id": "#a" + strconv.Itoa(i)}
+			properties["p"+strconv.Itoa(i)] = map[string]interface{}{"$ref": "#a" + strconv.Itoa(i)}
+		}
+		raw, err := json.Marshal(map[string]interface{}{"$id": "http://example.com/schema.json", "definitions": definitions, "properties": properties})
+		require.NoError(t, err)
+		c := NewCompiler()
+		c.Limits = &Limits{}
+		require.NoError(t, c.AddResource("schema.json", strings.NewReader(string(raw))))
+		return testing.AllocsPerRun(3, func() {
+			_, err := c.Compile(t.Context(), "schema.json")
+			require.NoError(t, err)
+		})
+	}
+	small, large := compile(50), compile(100)
+	t.Logf("50 references: %.0f allocations; 100 references: %.0f allocations", small, large)
+	require.Less(t, large, 3*small)
+}
+
+func TestZeroValidationContext(t *testing.T) {
+	t.Parallel()
+	s, err := CompileString(t.Context(), "schema.json", `{"type":"string"}`)
+	require.NoError(t, err)
+	require.NotPanics(t, func() {
+		require.NoError(t, ValidationContext{}.Validate(s, "valid"))
+		var validation *ValidationError
+		require.ErrorAs(t, ValidationContext{}.Validate(s, 42), &validation)
+	})
+}

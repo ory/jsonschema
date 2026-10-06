@@ -59,6 +59,9 @@ type ValidationContext struct{ budget *budget }
 // *Schema.ValidateInterface method. This will be useful in implementing keywords like
 // allOf/oneOf
 func (ctx ValidationContext) Validate(s *Schema, v interface{}) error {
+	if ctx.budget == nil {
+		return s.validate(v, newBudget(context.Background(), nil))
+	}
 	return s.validate(v, ctx.budget)
 }
 

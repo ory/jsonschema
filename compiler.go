@@ -103,12 +103,15 @@ func (c *Compiler) Compile(ctx context.Context, url string) (schema *Schema, err
 	defer func() { b.finished = true }()
 	defer func() {
 		if r := recover(); r != nil {
-			if abort, ok := r.(budgetAbort); ok {
-				err = abort.err
-				schema = nil
-			} else {
+			switch r := r.(type) {
+			case budgetAbort:
+				err = r.err
+			case InvalidJSONTypeError:
+				err = r
+			default:
 				panic(r)
 			}
+			schema = nil
 		}
 		if err != nil {
 			for _, resource := range c.resources {
@@ -227,9 +230,16 @@ func (c *Compiler) compileRef(ctx context.Context, r *resource, base, ref string
 		return rs, nil
 	}
 
-	ids := make(map[string]map[string]interface{})
-	if err := resolveIDs(r.draft, r.url, r.doc, ids, b); err != nil {
-		return nil, err
+	ids, ok := b.ids[r]
+	if !ok {
+		ids = make(map[string]map[string]interface{})
+		if err := resolveIDs(r.draft, r.url, r.doc, ids, b); err != nil {
+			return nil, err
+		}
+		if b.ids == nil {
+			b.ids = make(map[*resource]map[string]map[string]interface{})
+		}
+		b.ids[r] = ids
 	}
 	if v, ok := ids[refURL]; ok {
 		if err := c.validateSchema(ctx, r, "", v); err != nil {

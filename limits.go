@@ -17,7 +17,12 @@ import (
 var ErrResourceLimit = errors.New("jsonschema: resource limit exceeded")
 
 // ResourceLimitError identifies a budget without including schema or instance data.
-type ResourceLimitError struct{ Kind string }
+type ResourceLimitError struct {
+	Kind string
+	// Validation reports that the limit was reached while validating an
+	// instance, so the instance rather than the schema exceeded it.
+	Validation bool
+}
 
 func (e *ResourceLimitError) Error() string { return ErrResourceLimit.Error() + ": " + e.Kind }
 func (e *ResourceLimitError) Unwrap() error { return ErrResourceLimit }
@@ -79,8 +84,7 @@ type budget struct {
 	ids                                           map[*resource]map[string]map[string]interface{}
 	regexps                                       map[string]compiledRegex
 	reported                                      map[string]error
-	finished                                      bool
-	unboundedDisplay                              bool
+	validation                                    bool
 }
 
 func newBudget(ctx context.Context, limits *Limits) *budget {
@@ -93,7 +97,7 @@ func (b *budget) limit(kind string) error {
 	if err, ok := b.reported[kind]; ok {
 		return err
 	}
-	var err error = &ResourceLimitError{Kind: kind}
+	var err error = &ResourceLimitError{Kind: kind, Validation: b.validation}
 	if b.limits.OnLimit != nil {
 		err = b.limits.OnLimit(b.ctx, err)
 	}
@@ -282,7 +286,7 @@ func (b *budget) errorf(schemaPtr, format string, args ...interface{}) *Validati
 			case *regexp.Regexp:
 				args[i] = b.detail(arg.String())
 			case map[string]interface{}, []interface{}:
-				if b.displayLimit("diagnostic value", displaySize(arg, maxDiagnosticDetail), maxDiagnosticDetail) {
+				if displaySize(arg, maxDiagnosticDetail) > maxDiagnosticDetail {
 					args[i] = "<value>"
 				}
 			}
@@ -336,10 +340,18 @@ func (b *budget) duplicate(values []interface{}) (int, int, bool) {
 
 type numericKey string
 
-const maxDiagnosticDetail = 256
+// Diagnostic rendering bounds cap how much of a schema or instance an error
+// message repeats. They truncate a message and never fail an operation.
+const (
+	maxDiagnosticDetail = 20 << 10
+	maxDiagnosticNames  = 150
+	maxDiagnosticBytes  = 128 << 10
+	maxDiagnosticNodes  = 1000
+	maxDiagnosticDepth  = 128
+)
 
 func (b *budget) detail(value string) string {
-	if b != nil && b.limits != nil && b.displayLimit("diagnostic detail", len(value), maxDiagnosticDetail) {
+	if b != nil && b.limits != nil && len(value) > maxDiagnosticDetail {
 		return value[:maxDiagnosticDetail] + "..."
 	}
 	return value
@@ -376,8 +388,8 @@ func displaySize(v interface{}, limit int) int {
 
 func (b *budget) requiredError(missing []string) *ValidationError {
 	displayCount := len(missing)
-	if b.limits != nil && b.displayLimit("diagnostic properties", displayCount, 8) {
-		displayCount = 8
+	if b.limits != nil && displayCount > maxDiagnosticNames {
+		displayCount = maxDiagnosticNames
 	}
 	b.spend(displayCount)
 	displayed := make([]string, displayCount)
@@ -448,65 +460,4 @@ func (b *budget) numberText(value interface{}) string {
 		b.spend(size)
 	}
 	return text
-}
-
-// displayLimit reports whether a diagnostic display of the measured size is
-// capped. The policy is consulted only when measured exceeds limit.
-func (b *budget) displayLimit(kind string, measured, limit int) bool {
-	if measured <= limit {
-		return false
-	}
-	if b.finished {
-		err, known := b.reported[kind]
-		return !known || err != nil
-	}
-	return b.limit(kind) != nil
-}
-
-func (b *budget) observeError(err error) {
-	if b.limits == nil || err == nil {
-		return
-	}
-	var validation *ValidationError
-	switch err := err.(type) {
-	case *ValidationError:
-		validation = err
-	case *SchemaError:
-		b.detail(err.SchemaURL)
-		validation, _ = err.Err.(*ValidationError)
-	}
-	if validation == nil {
-		return
-	}
-	b.unboundedDisplay = b.limits.OnLimit != nil
-	type frame struct {
-		err   *ValidationError
-		depth int
-	}
-	stack := []frame{{validation, 1}}
-	nodes, size := 0, 0
-	for len(stack) > 0 {
-		current := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if current.err == nil {
-			continue
-		}
-		nodes = saturatedAdd(nodes, 1)
-		if b.displayLimit("diagnostic nodes", nodes, min(1000, b.limits.MaxErrors)) {
-			b.unboundedDisplay = false
-		}
-		if b.displayLimit("diagnostic depth", current.depth, min(128, b.limits.MaxDepth)) {
-			b.unboundedDisplay = false
-		}
-		message := b.detail(current.err.Message)
-		size = saturatedAdd(size, saturatedAdd(len(b.detail(current.err.InstancePtr)), len(b.detail(current.err.SchemaPtr))))
-		size = saturatedAdd(size, saturatedAdd(len(message), 8))
-		size = saturatedAdd(size, saturatedMultiply(2*(current.depth-1), strings.Count(message, "\n")+1))
-		if b.displayLimit("diagnostic bytes", size, 64<<10) {
-			b.unboundedDisplay = false
-		}
-		for _, cause := range current.err.Causes {
-			stack = append(stack, frame{cause, current.depth + 1})
-		}
-	}
 }

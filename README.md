@@ -135,6 +135,15 @@ threshold; returning an error enforces it. Reporting preserves complete results
 and does not impose the configured resource ceiling. Ordinary validation errors
 and cancellation remain errors. Callbacks must support concurrent operations.
 
+`ResourceLimitError.Validation` is true when the limit was reached while
+validating an instance, so the instance rather than the schema exceeded it.
+Validation only charges for the parts of an instance the schema describes; a
+value the schema accepts without constraints is not traversed.
+
+With limits set, error messages are bounded: long values, long lists of
+property names or enum values, and large error trees are truncated. These
+bounds never fail an operation and never invoke `OnLimit`.
+
 Resource readers and extension callbacks must apply their own input and work
 limits and honor cancellation.
 

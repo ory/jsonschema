@@ -115,7 +115,7 @@ func TestValidationDiagnosticRenderingLimits(t *testing.T) {
 	smallAllocations := testing.AllocsPerRun(3, func() { _ = small.Error() })
 	largeAllocations := testing.AllocsPerRun(3, func() { _ = large.Error() })
 	t.Logf("40 levels: %.0f allocations; 80 levels: %.0f allocations", smallAllocations, largeAllocations)
-	require.LessOrEqual(t, len(large.Error()), 64<<10)
+	require.LessOrEqual(t, len(large.Error()), maxDiagnosticBytes)
 	require.Less(t, largeAllocations, 3*smallAllocations)
 	require.Less(t, largeAllocations, float64(1000))
 }

@@ -100,7 +100,6 @@ func (c *Compiler) Compile(ctx context.Context, url string) (schema *Schema, err
 		return c.compileURL(ctx, url)
 	}
 	b := newBudget(ctx, c.Limits)
-	defer func() { b.finished = true }()
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -125,7 +124,6 @@ func (c *Compiler) Compile(ctx context.Context, url string) (schema *Schema, err
 		}
 	}
 	schema, err = c.compileURL(context.WithValue(ctx, budgetKey{}, b), url)
-	b.observeError(err)
 	b.spend(0)
 	return schema, err
 }
@@ -322,14 +320,20 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 			}
 		}
 		s.enumError = "enum failed"
-		if allPrimitives && (b.limits == nil || !b.displayLimit("diagnostic enum", displaySize(s.Enum, maxDiagnosticDetail), maxDiagnosticDetail)) {
+		if allPrimitives {
 			if len(s.Enum) == 1 {
 				s.enumError = fmt.Sprintf("value must be %#v", s.Enum[0])
 			} else {
-				strEnum := make([]string, len(s.Enum))
-				for i, item := range s.Enum {
+				strEnum := make([]string, 0, len(s.Enum))
+				size := 0
+				for _, item := range s.Enum {
 					b.spend(1)
-					strEnum[i] = fmt.Sprintf("%#v", item)
+					text := fmt.Sprintf("%#v", item)
+					if size += len(text) + 2; b.limits != nil && size > maxDiagnosticDetail-64 {
+						strEnum = append(strEnum, "...")
+						break
+					}
+					strEnum = append(strEnum, text)
 				}
 				s.enumError = fmt.Sprintf("value must be one of %s", strings.Join(strEnum, ", "))
 			}

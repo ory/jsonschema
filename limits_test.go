@@ -122,14 +122,14 @@ func TestValidationErrorDetailsBounded(t *testing.T) {
 	t.Parallel()
 	c := NewCompiler()
 	c.Limits = &Limits{}
-	address := "schema-" + strings.Repeat("a", 4096) + ".json"
-	value := strings.Repeat("v", 4096)
+	address := "schema-" + strings.Repeat("a", 4*maxDiagnosticDetail) + ".json"
+	value := strings.Repeat("v", 4*maxDiagnosticDetail)
 	require.NoError(t, c.AddResource(address, strings.NewReader(`{"const":"`+value+`"}`)))
 	s, err := c.Compile(t.Context(), address)
 	require.NoError(t, err)
 	err = s.ValidateInterface("different")
 	require.Error(t, err)
-	require.Less(t, len(err.Error()), 2048)
+	require.Less(t, len(err.Error()), 3*maxDiagnosticDetail)
 	var validation *ValidationError
 	require.ErrorAs(t, err, &validation)
 	require.Equal(t, s.URL, validation.SchemaURL)
@@ -230,11 +230,11 @@ func TestCompilerErrorDetailsBounded(t *testing.T) {
 	t.Parallel()
 	c := NewCompiler()
 	c.Limits = &Limits{}
-	address := "schema-" + strings.Repeat("a", 4096) + ".json"
+	address := "schema-" + strings.Repeat("a", 4*maxDiagnosticDetail) + ".json"
 	require.NoError(t, c.AddResource(address, strings.NewReader(`{"type":123}`)))
 	_, err := c.Compile(t.Context(), address)
 	require.Error(t, err)
-	require.Less(t, len(err.Error()), 2048)
+	require.Less(t, len(err.Error()), 3*maxDiagnosticDetail)
 }
 
 func TestCompilationCancellationFromExtension(t *testing.T) {

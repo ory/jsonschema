@@ -173,12 +173,10 @@ func (s *Schema) ValidateInterfaceContext(ctx context.Context, doc interface{}) 
 		}
 	}()
 	b := newBudget(ctx, s.limits)
-	defer func() { b.finished = true }()
-	b.scan(doc)
+	b.validation = true
 	if err := s.validate(doc, b); err != nil {
 		finishSchemaContext(err, s)
 		finishInstanceContext(err)
-		b.observeError(err)
 		b.spend(0)
 		return err
 	}
@@ -424,7 +422,7 @@ func (s *Schema) validate(v interface{}, b *budget) error {
 					for pname := range additionalProps {
 						b.spend(1)
 						pnames = append(pnames, strconv.Quote(b.detail(pname)))
-						if b.limits != nil && len(pnames) == 8 && b.displayLimit("diagnostic properties", len(additionalProps), 8) {
+						if b.limits != nil && len(pnames) == maxDiagnosticNames && len(additionalProps) > maxDiagnosticNames {
 							break
 						}
 					}

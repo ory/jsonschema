@@ -77,7 +77,7 @@ func (ve *ValidationError) MessageFmt() string {
 }
 
 func (ve *ValidationError) Error() string {
-	if ve.budget != nil && ve.budget.limits != nil && !ve.budget.unboundedDisplay {
+	if ve.budget != nil && ve.budget.limits != nil {
 		return ve.boundedError()
 	}
 	msg := ve.MessageFmt()
@@ -90,9 +90,9 @@ func (ve *ValidationError) Error() string {
 }
 
 func (ve *ValidationError) boundedError() string {
-	const maxBytes = 64 << 10
-	maxDepth := min(128, ve.budget.limits.MaxDepth)
-	maxNodes := min(1000, ve.budget.limits.MaxErrors)
+	const maxBytes = maxDiagnosticBytes
+	maxDepth := min(maxDiagnosticDepth, ve.budget.limits.MaxDepth)
+	maxNodes := min(maxDiagnosticNodes, ve.budget.limits.MaxErrors)
 	indentation := strings.Repeat(" ", 2*maxDepth)
 	var output strings.Builder
 	write := func(value string) bool {

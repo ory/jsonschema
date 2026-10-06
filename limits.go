@@ -174,17 +174,20 @@ func (b *budget) scan(v interface{}) {
 	}
 }
 
-func (b *budget) regex(pattern string) (*regexp.Regexp, error) {
+// regex compiles pattern and returns its estimated matching cost per input byte,
+// which is zero without limits.
+func (b *budget) regex(pattern string) (*regexp.Regexp, int, error) {
 	b.spend(len(pattern))
 	if cached, ok := b.regexps[pattern]; ok {
-		return cached.expression, nil
+		return cached.expression, cached.cost, nil
 	}
 	if b.limits == nil {
-		return regexp.Compile(pattern)
+		expression, err := regexp.Compile(pattern)
+		return expression, 0, err
 	}
 	tree, err := syntax.Parse(pattern, syntax.Perl)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	cost := b.regexCost(tree)
 	if cost >= b.limits.MaxRegexInstructions-b.regexInstructions {
@@ -195,10 +198,10 @@ func (b *budget) regex(pattern string) (*regexp.Regexp, error) {
 	b.spend(cost)
 	expression, err := regexp.Compile(pattern)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	b.regexps[pattern] = compiledRegex{expression, cost}
-	return expression, nil
+	return expression, cost, nil
 }
 
 func (b *budget) regexCost(tree *syntax.Regexp) int {
@@ -240,12 +243,16 @@ func (b *budget) regexCost(tree *syntax.Regexp) int {
 	return saturatedAdd(cost, extra)
 }
 
-func (b *budget) match(pattern *regexp.Regexp, value string) bool {
+// match charges matching work by the cost recorded when the pattern was compiled,
+// and costs the pattern again only when compilation recorded none.
+func (b *budget) match(pattern *regexp.Regexp, cost int, value string) bool {
 	if b.limits != nil {
-		if _, err := b.regex(pattern.String()); err != nil {
-			panic(err)
+		if cost == 0 {
+			var err error
+			if _, cost, err = b.regex(pattern.String()); err != nil {
+				panic(err)
+			}
 		}
-		cost := b.regexps[pattern.String()].cost
 		if len(value) > (b.limits.MaxWork-b.work)/cost {
 			b.stop("regex matching")
 		}
@@ -274,7 +281,7 @@ func (b *budget) errorf(schemaPtr, format string, args ...interface{}) *Validati
 			case *regexp.Regexp:
 				args[i] = b.detail(arg.String())
 			case map[string]interface{}, []interface{}:
-				if b.displayLimit("diagnostic value") {
+				if b.displayLimit("diagnostic value", displaySize(arg, maxDiagnosticDetail), maxDiagnosticDetail) {
 					args[i] = "<value>"
 				}
 			}
@@ -330,16 +337,47 @@ func (b *budget) duplicate(values []interface{}) (int, int, bool) {
 
 type numericKey string
 
+const maxDiagnosticDetail = 256
+
 func (b *budget) detail(value string) string {
-	if b != nil && b.limits != nil && len(value) > 256 && b.displayLimit("diagnostic detail") {
-		return value[:256] + "..."
+	if b != nil && b.limits != nil && b.displayLimit("diagnostic detail", len(value), maxDiagnosticDetail) {
+		return value[:maxDiagnosticDetail] + "..."
 	}
 	return value
 }
 
+// displaySize estimates the bytes rendering v takes. It stops counting once
+// the estimate exceeds limit, so its work is bounded by limit.
+func displaySize(v interface{}, limit int) int {
+	size := 2
+	switch v := v.(type) {
+	case map[string]interface{}:
+		for key, item := range v {
+			if size > limit {
+				break
+			}
+			size += len(key) + 2 + displaySize(item, limit-size)
+		}
+	case []interface{}:
+		for _, item := range v {
+			if size > limit {
+				break
+			}
+			size += 2 + displaySize(item, limit-size)
+		}
+	case string:
+		size += len(v)
+	case json.Number:
+		size += len(v)
+	default:
+		size += 3
+	}
+	return size
+}
+
 func (b *budget) requiredError(missing []string) *ValidationError {
 	displayCount := len(missing)
-	if b.limits != nil && displayCount > 8 && b.displayLimit("diagnostic properties") {
+	if b.limits != nil && b.displayLimit("diagnostic properties", displayCount, 8) {
 		displayCount = 8
 	}
 	b.spend(displayCount)
@@ -413,7 +451,12 @@ func (b *budget) numberText(value interface{}) string {
 	return text
 }
 
-func (b *budget) displayLimit(kind string) bool {
+// displayLimit reports whether a diagnostic display of the measured size is
+// capped. The policy is consulted only when measured exceeds limit.
+func (b *budget) displayLimit(kind string, measured, limit int) bool {
+	if measured <= limit {
+		return false
+	}
 	if b.finished {
 		err, known := b.reported[kind]
 		return !known || err != nil
@@ -450,17 +493,17 @@ func (b *budget) observeError(err error) {
 			continue
 		}
 		nodes = saturatedAdd(nodes, 1)
-		if nodes > min(1000, b.limits.MaxErrors) && b.displayLimit("diagnostic nodes") {
+		if b.displayLimit("diagnostic nodes", nodes, min(1000, b.limits.MaxErrors)) {
 			b.unboundedDisplay = false
 		}
-		if current.depth > min(128, b.limits.MaxDepth) && b.displayLimit("diagnostic depth") {
+		if b.displayLimit("diagnostic depth", current.depth, min(128, b.limits.MaxDepth)) {
 			b.unboundedDisplay = false
 		}
 		message := b.detail(current.err.Message)
 		size = saturatedAdd(size, saturatedAdd(len(b.detail(current.err.InstancePtr)), len(b.detail(current.err.SchemaPtr))))
 		size = saturatedAdd(size, saturatedAdd(len(message), 8))
 		size = saturatedAdd(size, saturatedMultiply(2*(current.depth-1), strings.Count(message, "\n")+1))
-		if size > 64<<10 && b.displayLimit("diagnostic bytes") {
+		if b.displayLimit("diagnostic bytes", size, 64<<10) {
 			b.unboundedDisplay = false
 		}
 		for _, cause := range current.err.Causes {

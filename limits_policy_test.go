@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -224,6 +225,110 @@ func TestLimitPolicyConcurrentOperationContexts(t *testing.T) {
 			require.NoError(t, s.ValidateInterfaceContext(ctx, "valid"))
 			require.Equal(t, 1, observed)
 			require.Equal(t, 1, compiled)
+		})
+	}
+}
+
+func TestLimitPolicyReportsOnlyExceededDiagnostics(t *testing.T) {
+	t.Parallel()
+	large := make([]interface{}, 32)
+	for i := range large {
+		large[i] = fmt.Sprintf("%s%02d", strings.Repeat("v", 16), i)
+	}
+	largeEnum, err := json.Marshal(map[string]interface{}{"enum": large})
+	require.NoError(t, err)
+	extension := Extension{
+		Compile: func(_ CompilerContext, m map[string]interface{}) (interface{}, error) {
+			if _, ok := m["unexpected"]; ok {
+				return true, nil
+			}
+			return nil, nil
+		},
+		Validate: func(ctx ValidationContext, _ interface{}, v interface{}) error {
+			return ctx.Error("unexpected", "unexpected %v", v)
+		},
+	}
+	for _, tc := range []struct {
+		name, schema string
+		value        interface{}
+		observed     map[string]int
+		contains     string
+	}{
+		{"small enum", `{"enum":["a","b"]}`, "c", map[string]int{}, `value must be one of "a", "b"`},
+		{"large enum", string(largeEnum), "c", map[string]int{"diagnostic enum": 1, "diagnostic detail": 1}, large[31].(string)},
+		{"small value", `{"unexpected":true}`, map[string]interface{}{"k": "v"}, map[string]int{}, "map[k:v]"},
+		{"large value", `{"unexpected":true}`, large, map[string]int{"diagnostic value": 1, "diagnostic detail": 1}, large[31].(string)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			observed := map[string]int{}
+			c := NewCompiler()
+			c.Extensions["unexpected"] = extension
+			c.Limits = &Limits{OnLimit: func(_ context.Context, err error) error {
+				var limit *ResourceLimitError
+				require.ErrorAs(t, err, &limit)
+				observed[limit.Kind]++
+				return nil
+			}}
+			require.NoError(t, c.AddResource("schema.json", strings.NewReader(tc.schema)))
+			s, err := c.Compile(t.Context(), "schema.json")
+			require.NoError(t, err)
+			err = s.ValidateInterfaceContext(t.Context(), tc.value)
+			var validation *ValidationError
+			require.ErrorAs(t, err, &validation)
+			require.Contains(t, err.Error(), tc.contains)
+			require.Equal(t, tc.observed, observed)
+		})
+	}
+}
+
+func TestLimitPolicyValidationReusesCompiledPatterns(t *testing.T) {
+	t.Parallel()
+	observed := map[string]int{}
+	c := NewCompiler()
+	c.Limits = &Limits{MaxRegexInstructions: 1, OnLimit: func(_ context.Context, err error) error {
+		var limit *ResourceLimitError
+		require.ErrorAs(t, err, &limit)
+		observed[limit.Kind]++
+		return nil
+	}}
+	require.NoError(t, c.AddResource("schema.json", strings.NewReader(`{"anyOf":[{"type":"string","pattern":"(ab){20}"},{"type":"object","patternProperties":{"(cd){20}":true}}]}`)))
+	s, err := c.Compile(t.Context(), "schema.json")
+	require.NoError(t, err)
+	require.Equal(t, map[string]int{"regex instructions": 1}, observed)
+	for _, value := range []interface{}{strings.Repeat("ab", 20), map[string]interface{}{strings.Repeat("cd", 20): true}} {
+		clear(observed)
+		require.NoError(t, s.ValidateInterfaceContext(t.Context(), value))
+		require.Empty(t, observed)
+	}
+}
+
+func BenchmarkValidatePatterns(b *testing.B) {
+	const schema = `{"type":"object","properties":{"email":{"type":"string","pattern":"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"},"name":{"type":"string","pattern":"^[\\p{L} .'-]{1,128}$"}},"patternProperties":{"^x-":{"type":"string"}}}`
+	value := map[string]interface{}{"email": "user@example.com", "name": "Jane Doe", "x-source": "import"}
+	for _, tc := range []struct {
+		name   string
+		limits *Limits
+	}{
+		{"unlimited", nil},
+		{"limited", &Limits{OnLimit: func(context.Context, error) error { return nil }}},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			c := NewCompiler()
+			c.Limits = tc.limits
+			if err := c.AddResource("schema.json", strings.NewReader(schema)); err != nil {
+				b.Fatal(err)
+			}
+			s, err := c.Compile(b.Context(), "schema.json")
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			for b.Loop() {
+				if err := s.ValidateInterfaceContext(b.Context(), value); err != nil {
+					b.Fatal(err)
+				}
+			}
 		})
 	}
 }

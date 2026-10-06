@@ -312,7 +312,7 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 			}
 		}
 		s.enumError = "enum failed"
-		if allPrimitives && (b.limits == nil || !b.displayLimit("diagnostic enum")) {
+		if allPrimitives && (b.limits == nil || !b.displayLimit("diagnostic enum", displaySize(s.Enum, maxDiagnosticDetail), maxDiagnosticDetail)) {
 			if len(s.Enum) == 1 {
 				s.enumError = fmt.Sprintf("value must be %#v", s.Enum[0])
 			} else {
@@ -398,10 +398,11 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 		s.PatternProperties = make(map[*regexp.Regexp]*Schema, len(patternProps))
 		for pattern, pmap := range patternProps {
 			b.spend(1)
-			expression, regexErr := b.regex(pattern)
+			expression, cost, regexErr := b.regex(pattern)
 			if regexErr != nil {
 				return regexErr
 			}
+			s.recordPatternCost(expression, cost)
 			s.PatternProperties[expression], err = c.compile(ctx, r, nil, base, pmap)
 			if err != nil {
 				return err
@@ -477,10 +478,12 @@ func (c *Compiler) compileMap(ctx context.Context, r *resource, s *Schema, base 
 	s.MinLength, s.MaxLength = loadInt("minLength"), loadInt("maxLength")
 
 	if pattern, ok := m["pattern"]; ok {
-		s.Pattern, err = b.regex(pattern.(string))
+		var cost int
+		s.Pattern, cost, err = b.regex(pattern.(string))
 		if err != nil {
 			return err
 		}
+		s.recordPatternCost(s.Pattern, cost)
 	}
 
 	if format, ok := m["format"]; ok {

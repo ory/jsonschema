@@ -20,6 +20,8 @@ import (
 // A Schema represents compiled version of json-schema.
 type Schema struct {
 	limits *Limits
+	// patternCosts holds the matching cost of each compiled pattern when limits apply.
+	patternCosts map[*regexp.Regexp]int
 
 	URL string // absolute url of the resource.
 	Ptr string // json-pointer to schema. always starts with `#`.
@@ -119,6 +121,16 @@ func (s *Schema) ResourceLimits() *Limits {
 	}
 	limits := *s.limits
 	return &limits
+}
+
+func (s *Schema) recordPatternCost(expression *regexp.Regexp, cost int) {
+	if cost == 0 {
+		return
+	}
+	if s.patternCosts == nil {
+		s.patternCosts = make(map[*regexp.Regexp]int)
+	}
+	s.patternCosts[expression] = cost
 }
 
 // Validate validates the given json data, against the json-schema.
@@ -256,7 +268,7 @@ func (s *Schema) validate(v interface{}, b *budget) error {
 			if !ok {
 				formatValid = false
 			} else {
-				_, err := b.regex(pattern)
+				_, _, err := b.regex(pattern)
 				formatValid = err == nil
 			}
 		} else {
@@ -388,15 +400,16 @@ func (s *Schema) validate(v interface{}, b *budget) error {
 		if s.RegexProperties {
 			for pname := range v {
 				b.spend(1)
-				if _, err := b.regex(pname); err != nil {
+				if _, _, err := b.regex(pname); err != nil {
 					errors = append(errors, b.errorf("", "patternProperty %q is not valid regex", pname))
 				}
 			}
 		}
 		for pattern, pschema := range s.PatternProperties {
 			b.spend(1)
+			cost := s.patternCosts[pattern]
 			for pname, pvalue := range v {
-				if b.match(pattern, pname) {
+				if b.match(pattern, cost, pname) {
 					delete(additionalProps, pname)
 					if err := pschema.validate(pvalue, b); err != nil {
 						errors = append(errors, addContext(b.escape(pname), b.joinPtr("patternProperties", b.escape(pattern.String())), err))
@@ -411,7 +424,7 @@ func (s *Schema) validate(v interface{}, b *budget) error {
 					for pname := range additionalProps {
 						b.spend(1)
 						pnames = append(pnames, strconv.Quote(b.detail(pname)))
-						if b.limits != nil && len(pnames) == 8 && len(additionalProps) > 8 && b.displayLimit("diagnostic properties") {
+						if b.limits != nil && len(pnames) == 8 && b.displayLimit("diagnostic properties", len(additionalProps), 8) {
 							break
 						}
 					}
@@ -516,7 +529,7 @@ func (s *Schema) validate(v interface{}, b *budget) error {
 				errors = append(errors, b.errorf("maxLength", "length must be <= %d, but got %d", s.MaxLength, length))
 			}
 		}
-		if s.Pattern != nil && !b.match(s.Pattern, v) {
+		if s.Pattern != nil && !b.match(s.Pattern, s.patternCosts[s.Pattern], v) {
 			errors = append(errors, b.errorf("pattern", "does not match pattern %q", s.Pattern))
 		}
 
